@@ -1,0 +1,125 @@
+import asyncio
+import math
+import os
+import struct
+import sys
+
+# Configure mock providers before importing app
+os.environ["GATEWAY_BEARER_TOKEN"] = "test-secret-token-123"
+os.environ["STT_PROVIDER"] = "mock"
+os.environ["LLM_PROVIDER"] = "mock"
+os.environ["TTS_PROVIDER"] = "mock"
+
+import httpx
+import json
+from adapters import ChitLLM
+from app import app, lifespan
+
+
+def make_test_16k_pcm(duration_sec: float = 1.0, freq_hz: float = 440.0) -> bytes:
+    sample_rate = 16000
+    total_samples = int(sample_rate * duration_sec)
+    buf = bytearray(total_samples * 2)
+    for i in range(total_samples):
+        val = int(12000 * math.sin(2.0 * math.pi * freq_hz * i / sample_rate))
+        struct.pack_into("<h", buf, i * 2, val)
+    return bytes(buf)
+
+
+async def run_tests() -> None:
+    async with lifespan(app):
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            # 1. Test /health
+            r_health = await client.get("/health")
+            assert r_health.status_code == 200, f"Expected 200, got {r_health.status_code}"
+            print("[PASS] GET /health ->", r_health.json())
+
+            # 2. Test /echo auth rejection (401)
+            pcm_in = make_test_16k_pcm(1.0)
+            r_unauth = await client.post("/echo", content=pcm_in)
+            assert r_unauth.status_code == 401, f"Expected 401, got {r_unauth.status_code}"
+            print("[PASS] POST /echo without token rejected with HTTP 401")
+
+            # 3. Test /echo round-trip (16 kHz in -> 16 kHz out, exact byte match)
+            headers = {"Authorization": "Bearer test-secret-token-123"}
+            r_echo = await client.post("/echo", headers=headers, content=pcm_in)
+            assert r_echo.status_code == 200
+            assert r_echo.headers.get("X-Sample-Rate") == "16000"
+            assert r_echo.content == pcm_in, "Echoed PCM bytes did not match input!"
+            print(
+                f"[PASS] POST /echo -> X-Sample-Rate={r_echo.headers.get('X-Sample-Rate')}, "
+                f"echoed {len(r_echo.content)} bytes identically"
+            )
+
+            # 4. Test /talk short-press filter (< 400 ms -> 204 No Content)
+            short_pcm = make_test_16k_pcm(0.2)
+            r_short = await client.post("/talk", headers=headers, content=short_pcm)
+            assert r_short.status_code == 204
+            print("[PASS] POST /talk (< 400 ms) ignored with HTTP 204")
+
+            # 5. Test /talk full streaming pipeline (STT -> LLM -> TTS)
+            r_talk = await client.post("/talk", headers=headers, content=pcm_in)
+            assert r_talk.status_code == 200
+            assert r_talk.headers.get("X-Sample-Rate") == "24000"
+            assert r_talk.headers.get("X-Action") == "WAVE"
+            assert "X-Reply-Text" not in r_talk.headers
+            assert len(r_talk.content) > 0 and len(r_talk.content) % 2 == 0
+            print(
+                f"[PASS] POST /talk -> X-Sample-Rate={r_talk.headers.get('X-Sample-Rate')}, "
+                f"X-Action={r_talk.headers.get('X-Action')}, "
+                f"received {len(r_talk.content)} bytes of 24 kHz s16le PCM "
+                f"({len(r_talk.content) / (24000 * 2):.2f} sec)"
+            )
+
+    # 6. Test ChitLLM strict API contract (X-API-Key, session_id persistence, 429 retry)
+    call_count = 0
+
+    def mock_chit_handler(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        assert request.url.path == "/chat"
+        assert request.headers.get("X-API-Key") == "secret-chit-key"
+        body = json.loads(request.content.decode("utf-8"))
+        # Strict schema check: only {"message", "think", "session_id"} allowed
+        allowed_keys = {"message", "think", "session_id"}
+        assert set(body.keys()).issubset(allowed_keys), f"Illegal keys sent to Chit: {body.keys()}"
+        if call_count == 1:
+            return httpx.Response(429, json={"detail": "Queue full"})
+        if call_count == 2:
+            assert "session_id" not in body
+            return httpx.Response(
+                200,
+                json={
+                    "text": "Hello Pranav! I am Chit.",
+                    "session_id": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c",
+                    "confidence": 0.95,
+                },
+            )
+        assert body.get("session_id") == "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"
+        return httpx.Response(
+            200,
+            json={
+                "text": "I remember our session.",
+                "session_id": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c",
+                "confidence": 0.96,
+            },
+        )
+
+    os.environ["CHIT_BASE_URL"] = "https://api.chitt.online"
+    os.environ["CHIT_API_KEY"] = "secret-chit-key"
+    async with httpx.AsyncClient(transport=httpx.MockTransport(mock_chit_handler)) as mock_http:
+        chit = ChitLLM(mock_http)
+        t1_sentences = [s async for s in chit.reply([], "Hi")]
+        assert t1_sentences == ["Hello Pranav!", "I am Chit."]
+        assert chit.session_id == "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c"
+        t2_sentences = [s async for s in chit.reply([], "Do you remember me?")]
+        assert t2_sentences == ["I remember our session."]
+        print(
+            f"[PASS] ChitLLM contract -> 429 retry + strict schema + session_id "
+            f"({chit.session_id[:8]}...) + sentence splitting verified"
+        )
+
+
+if __name__ == "__main__":
+    asyncio.run(run_tests())
