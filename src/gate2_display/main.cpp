@@ -8,8 +8,8 @@
 // Build & Upload: pio run -e gate2_display -t upload -t monitor
 // Wiring:
 //   MOSI (SDA) -> GPIO 11, SCLK (SCL) -> GPIO 12, DC -> GPIO 9, RST -> GPIO 14, BL -> GPIO 13
-//   8-pin display (with CS): CS -> GPIO 10, set TFT_HAS_CS_PIN 1 in include/pins.h
-//   7-pin display (no CS):   set TFT_HAS_CS_PIN 0 in include/pins.h (uses SPI_MODE3)
+//   7-pin display (no CS):   Default (TFT_HAS_CS_PIN 0 in include/pins.h, uses SPI_MODE3)
+//   8-pin display (with CS): CS -> GPIO 10, set TFT_HAS_CS_PIN 1 in include/pins.h (uses SPI_MODE0)
 // Pass Criteria:
 //   - Animated robot eyes render crisply with zero tearing or flicker
 //   - Serial prints sustained > 25 FPS using partial eye-band push from PSRAM

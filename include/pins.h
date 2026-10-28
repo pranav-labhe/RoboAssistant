@@ -26,8 +26,8 @@
 #define PIN_AMP_DIN     7
 
 // --- 3. ST7789 240x240 SPI TFT Display (SPI2_HOST, 3.3V) ---
-// Set TFT_HAS_CS_PIN to 1 for 8-pin displays (with CS), or 0 for 7-pin CS-less displays
-#define TFT_HAS_CS_PIN  1
+// Set TFT_HAS_CS_PIN to 1 for 8-pin displays (with CS), or 0 for 7-pin CS-less displays (Default: 0 for affordable 7-pin ST7789)
+#define TFT_HAS_CS_PIN  0
 
 #define PIN_TFT_MOSI    11  // SDA
 #define PIN_TFT_SCLK    12  // SCL
