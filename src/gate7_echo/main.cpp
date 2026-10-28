@@ -195,22 +195,33 @@ static void initAudioI2S() {
     i2s_zero_dma_buffer(AMP_I2S_PORT);
 }
 
-static void connectWiFiAndSyncNTP() {
+static bool connectWiFiAndSyncNTP() {
     WiFi.mode(WIFI_STA);
     WiFi.setSleep(false);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     Serial.printf("[Gate 7] Connecting to Wi-Fi (%s)", WIFI_SSID);
+    uint32_t startMs = millis();
     while (WiFi.status() != WL_CONNECTED) {
         delay(300);
         Serial.print(".");
+        if (millis() - startMs > 20000) {
+            Serial.println("\n[FAIL] Wi-Fi connection timed out! Check WIFI_SSID / WIFI_PASSWORD in robot_secrets.h");
+            return false;
+        }
     }
     Serial.printf("\n[OK] Wi-Fi Connected: %s\n", WiFi.localIP().toString().c_str());
 
     configTime(0, 0, "pool.ntp.org", "time.cloudflare.com");
+    uint32_t ntpStart = millis();
     while (time(nullptr) < 1700000000) {
         delay(250);
+        if (millis() - ntpStart > 15000) {
+            Serial.println("[FAIL] NTP clock sync timed out!");
+            return false;
+        }
     }
     Serial.println("[OK] NTP Clock Synced.");
+    return true;
 }
 
 static size_t recordFromMic() {
@@ -241,6 +252,9 @@ static size_t recordFromMic() {
 }
 
 static void sendToEchoGateway(size_t sampleCount) {
+    if (WiFi.status() != WL_CONNECTED || time(nullptr) < 1700000000) {
+        if (!connectWiFiAndSyncNTP()) return;
+    }
     const size_t payloadBytes = sampleCount * sizeof(int16_t);
     String url = String(GATEWAY_BASE_URL) + "/echo";
     Serial.printf("[Gate 7] POST %s (%u bytes)...\n", url.c_str(), static_cast<unsigned>(payloadBytes));

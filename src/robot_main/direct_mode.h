@@ -275,14 +275,17 @@ static bool directReplyChit(const String& transcript, String& reply) {
 }
 
 static bool extractWaveTag(String& reply) {
-    String head = reply.substring(0, 6);
-    head.toUpperCase();
-    if (head == "[WAVE]") {
-        reply = reply.substring(6);
+    bool found = false;
+    while (true) {
+        String upper = reply;
+        upper.toUpperCase();
+        int idx = upper.indexOf("[WAVE]");
+        if (idx < 0) break;
+        found = true;
+        reply = reply.substring(0, idx) + " " + reply.substring(idx + 6);
         reply.trim();
-        return true;
     }
-    return false;
+    return found;
 }
 
 // Locates the base64 audio inside the Gemini TTS JSON *in place* (no JSON DOM:
@@ -316,10 +319,10 @@ static bool directSynthesize(const String& text, size_t& pcmBytes, uint32_t& sam
     }
     start++;
 
-    // mimeType is e.g. "audio/L16;codec=pcm;rate=24000" — normally emitted before "data"
+    // mimeType is e.g. "audio/L16;codec=pcm;rate=24000" — may appear before or after "data"
     sampleRate = TTS_DEFAULT_RATE;
     const char* rate = strstr(inlineObj, "rate=");
-    if (rate && rate < start) {
+    if (rate && (rate < start || (rate > end && rate < end + 200))) {
         uint32_t parsed = static_cast<uint32_t>(atoi(rate + 5));
         if (parsed >= 8000 && parsed <= 48000) sampleRate = parsed;
     }

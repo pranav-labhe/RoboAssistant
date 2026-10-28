@@ -526,6 +526,7 @@ static void calibrateNoiseFloor() {
     if (ambientRms <= 0 || ambientRms > VAD_MAX_VALID_AMBIENT_RMS) {
         // Disconnected or floating mic line safety fallback: disable auto-VAD so it never loops
         g_autoVadEnabled = false;
+        g_cfg.vad = false;
         g_vadThresholdRms = 1500;
         Serial.printf("[VAD] Ambient RMS=%ld out of range (mic disconnected/floating) -> Auto-VAD disabled; use GPIO 1 PTT.\n",
                       static_cast<long>(ambientRms));

@@ -130,10 +130,10 @@ async def echo_pcm(
 
 
 def extract_action_tag(sentence: str) -> tuple[Optional[str], str]:
-    """Extracts leading [WAVE] tag from the first sentence so TTS doesn't read it aloud."""
+    """Extracts [WAVE] tag anywhere in a sentence so TTS never reads it aloud."""
     trimmed = sentence.strip()
-    if trimmed.upper().startswith("[WAVE]"):
-        cleaned = trimmed[6:].strip()
+    if re.search(r"\[wave\]", trimmed, flags=re.IGNORECASE):
+        cleaned = re.sub(r"\s*\[wave\]\s*", " ", trimmed, flags=re.IGNORECASE).strip()
         return "WAVE", cleaned
     return None, trimmed
 
