@@ -10,6 +10,7 @@
 #include "pins.h"
 #include "certs.h"
 #include "robot_secrets.h"
+#include "robot_config.h"
 
 // ============================================================================
 // Gates 9-12 + Phase 5 VAD: Dual-Core Tabletop Voice Robot (`[env:robot_main]`)
@@ -595,14 +596,16 @@ static size_t captureVadUtteranceFromPreroll() {
     return recorded;
 }
 
-static void processTalkTurn(size_t sampleCount) {
+#include "direct_mode.h"
+
+static void processGatewayTurn(size_t sampleCount) {
     if (!ensureWiFiAndClock()) {
         return;
     }
 
     g_robotState = STATE_THINKING;
     const size_t payloadBytes = sampleCount * sizeof(int16_t);
-    String url = String(GATEWAY_BASE_URL) + "/talk";
+    String url = g_cfg.gatewayUrl + "/talk";
 
     HTTPClient http;
     WiFiClient plainClient;
@@ -619,7 +622,7 @@ static void processTalkTurn(size_t sampleCount) {
 
     const char* headerKeys[] = {"X-Sample-Rate", "X-Action"};
     http.collectHeaders(headerKeys, 2);
-    http.addHeader("Authorization", String("Bearer ") + GATEWAY_BEARER_TOKEN);
+    http.addHeader("Authorization", String("Bearer ") + g_cfg.gatewayToken);
     http.addHeader("X-Session-Id", String("esp32s3-") + String(static_cast<uint32_t>(ESP.getEfuseMac() & 0xFFFFFFFFULL), HEX));
     http.addHeader("Content-Type", "audio/pcm;rate=16000");
 
@@ -664,6 +667,14 @@ static void processTalkTurn(size_t sampleCount) {
     flushMicAfterPlayback();
 }
 
+static void processTalkTurn(size_t sampleCount) {
+    if (g_cfg.mode == "direct") {
+        processDirectTurn(sampleCount);
+    } else {
+        processGatewayTurn(sampleCount);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     uint32_t startMs = millis();
@@ -672,11 +683,13 @@ void setup() {
     }
 
     pinMode(PIN_PTT_BTN, INPUT_PULLUP);
+    configLoad();
+    g_autoVadEnabled = g_cfg.vad;
 
     g_recordPsramBuf  = static_cast<int16_t*>(ps_malloc(MAX_RECORD_SAMPLES * sizeof(int16_t)));
     g_prerollPsramBuf = static_cast<int16_t*>(ps_malloc(VAD_PREROLL_SAMPLES * sizeof(int16_t)));
     g_prebufPsram     = static_cast<uint8_t*>(ps_malloc(PREBUFFER_BYTES));
-    if (!g_recordPsramBuf || !g_prerollPsramBuf || !g_prebufPsram) {
+    if (!g_recordPsramBuf || !g_prerollPsramBuf || !g_prebufPsram || !directModeAllocate()) {
         Serial.println("[FAIL] PSRAM allocation failed in robot_main!");
         while (true) { delay(1000); }
     }
@@ -687,14 +700,27 @@ void setup() {
 
     initAudioI2S();
     ensureWiFiAndClock();
+    configServerBegin();
     if (g_autoVadEnabled) {
         calibrateNoiseFloor();
     }
-    Serial.printf("[READY] Tabletop Robot Online (Hands-Free VAD: %s). Speak or hold GPIO 1 (tap GPIO 1 to toggle VAD)!\n",
-                  g_autoVadEnabled ? "ON" : "OFF");
+    Serial.printf("[READY] Robot Online | Mode: %s (LLM: %s) | VAD: %s | Config API: http://%s/config\n",
+                  g_cfg.mode.c_str(), g_cfg.llm.c_str(), g_autoVadEnabled ? "ON" : "OFF",
+                  WiFi.localIP().toString().c_str());
 }
 
 void loop() {
+    g_configServer.handleClient();
+    if (g_cfgVadChangedPending) {
+        g_cfgVadChangedPending = false;
+        g_autoVadEnabled = g_cfg.vad;
+        if (g_autoVadEnabled) {
+            calibrateNoiseFloor();
+        } else {
+            flushMicAfterPlayback();
+        }
+    }
+
     // 1. Check GPIO 1 Button: Hold (>= 400 ms) = Push-to-Talk; Quick Tap (< 350 ms) = Toggle Hands-Free VAD
     if (digitalRead(PIN_PTT_BTN) == LOW) {
         delay(30); // 30 ms press debounce
@@ -709,6 +735,7 @@ void loop() {
 
             if (heldMs < 350 && samples < MIN_VALID_SAMPLES) {
                 g_autoVadEnabled = !g_autoVadEnabled;
+                g_cfg.vad = g_autoVadEnabled;
                 if (g_autoVadEnabled) {
                     calibrateNoiseFloor();
                 } else {

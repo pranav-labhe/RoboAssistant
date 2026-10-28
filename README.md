@@ -4,8 +4,22 @@ A compact tabletop voice robot (~20–30 cm, inspired by OttoRobot + XiaoZhi AI)
 
 ---
 
-## 🧭 1. How the System Works (Architecture)
+## 🧭 1. How the System Works (Two Built-In Modes: Direct On-Chip vs. Gateway)
 
+Your `ESP32-S3-WROOM-1-N16R8` has **8 MB of Octal PSRAM**, which allows `robot_main` to support **both** operating modes out of the box (switchable live via `POST http://<robot-ip>/config` with zero re-flashing):
+
+### Mode A — Direct On-Chip Cloud Mode (`mode = "direct"`, Default — Zero Extra Hop!)
+```
+┌───────────────────────────────────────────────────┐       Verified TLS (GTS Root R4 / ISRG)       ┌──────────────────────────────────────────┐
+│        ESP32-S3 Tabletop Robot (8 MB PSRAM)       │ ────────────────────────────────────────────► │  Google Gemini API & Chit (chitt.online) │
+│                                                   │  1. STT: 16kHz WAV base64 -> Gemini Flash     │                                          │
+│ • Core 0: 30 FPS ST7789 Eye Animation             │  2. LLM: Gemini Flash OR Chit POST /chat      │ • Zero middleman server needed           │
+│ • Core 1: Hands-Free VAD + PTT + Direct TLS       │  3. TTS: Gemini 24kHz base64 decoded in PSRAM │ • Live config via POST /config (NVS)     │
+│ • Built-in HTTP Config API: GET/POST /config      │ ◄──────────────────────────────────────────── │                                          │
+└───────────────────────────────────────────────────┘                                               └──────────────────────────────────────────┘
+```
+
+### Mode B — Voice Gateway Mode (`mode = "gateway"`, Sentence-by-Sentence Streaming)
 ```
 ┌───────────────────────────────────────────┐         HTTP / Verified HTTPS         ┌──────────────────────────────────────────────┐
 │          ESP32-S3 Tabletop Robot          │ ────────────────────────────────────► │         Python FastAPI Voice Gateway         │
@@ -18,8 +32,7 @@ A compact tabletop voice robot (~20–30 cm, inspired by OttoRobot + XiaoZhi AI)
 └───────────────────────────────────────────┘   X-Sample-Rate: 24000, X-Action: WAVE└──────────────────────────────────────────────┘
 ```
 
-* **Zero Cloud Keys on the Microcontroller**: The ESP32-S3 never calls OpenAI or Google directly and never parses multi-megabyte JSON/base64 strings in SRAM. It sends raw 16 kHz PCM audio to your Gateway and plays back raw streamed 24 kHz PCM audio.
-* **Outside-Repo Secrets Isolation**: All sensitive credentials (Wi-Fi password, Gateway Bearer token, `GEMINI_API_KEY`, `CHIT_API_KEY`) live **outside** the Git repository in `~/.robo_secrets/` (`C:\Users\<Username>\.robo_secrets\`).
+* **Outside-Repo Secrets Isolation**: All sensitive credentials (Wi-Fi password, Bearer token, `GEMINI_API_KEY`, `CHIT_API_KEY`) live **outside** the Git repository in `~/.robo_secrets/` (`C:\Users\<Username>\.robo_secrets\`) or in ESP32 NVS Flash via `POST /config`.
 
 ---
 
@@ -48,7 +61,10 @@ RoboAssistant/
 │   ├── gate5_loopback/main.cpp      # Gate 5: Records 3s from mic into PSRAM on GPIO 1 hold & plays it back locally
 │   ├── gate6_health/main.cpp        # Gate 6: Verifies 2.4 GHz Wi-Fi, NTP clock sync, and TLS GET /health
 │   ├── gate7_echo/main.cpp          # Gate 7: Streams 16 kHz mic audio to POST /echo & plays back chunked response
-│   └── robot_main/main.cpp          # Gates 9–12 + VAD: Full dual-core voice robot (Hands-Free VAD + PTT + Face + TTS)
+│   └── robot_main/
+│       ├── main.cpp                 # Gates 9–12 + VAD: Dual-core robot (Hands-Free VAD + PTT + Face + Direct/Gateway)
+│       ├── direct_mode.h            # Direct On-Chip pipeline (ESP32 PSRAM -> Gemini STT -> Gemini/Chit LLM -> Gemini TTS)
+│       └── robot_config.h           # Live NVS Flash config store + authenticated GET/POST http://<robot-ip>/config API
 │
 └── gateway/
     ├── app.py                       # FastAPI server exposing /health, /echo, and /talk with per-device sessions
@@ -79,7 +95,9 @@ RoboAssistant/
 | [`src/gate5_loopback/main.cpp`](src/gate5_loopback/main.cpp) | **Hardware Test 5**: Offline voice recorder—hold `GPIO 1` to record up to 3 seconds into PSRAM (`96 KB`), release to hear your own voice played back through the speaker. |
 | [`src/gate6_health/main.cpp`](src/gate6_health/main.cpp) | **Network Test 6**: Connects to 2.4 GHz Wi-Fi, syncs the ESP32 clock via NTP (required for TLS certificate validation), and calls `GET /health` every 10 seconds while monitoring free heap. |
 | [`src/gate7_echo/main.cpp`](src/gate7_echo/main.cpp) | **Network Test 7**: Sends recorded 16 kHz PCM audio to `POST /echo` and streams the chunked 16 kHz response back through the 400 ms PSRAM pre-buffer + 1-byte odd-chunk alignment guard. |
-| [`src/robot_main/main.cpp`](src/robot_main/main.cpp) | **Production Firmware**: Full dual-core voice robot combining Core 0 30 FPS eye expressions (`BOOT`, `IDLE`, `LISTENING`, `THINKING`, `SPEAKING`, `ERROR`) with Core 1 Hands-Free Always-Listening Energy VAD (250 ms pre-roll, auto noise-floor calibration, 900 ms silence hangover, 450 ms half-duplex post-playback echo guard) + `GPIO 1` Push-to-Talk override. |
+| [`src/robot_main/main.cpp`](src/robot_main/main.cpp) | **Production Firmware**: Full dual-core voice robot combining Core 0 30 FPS eye expressions (`BOOT`, `IDLE`, `LISTENING`, `THINKING`, `SPEAKING`, `ERROR`) with Core 1 Hands-Free Always-Listening Energy VAD, `GPIO 1` Push-to-Talk override, and runtime dispatch between Direct On-Chip Mode and Gateway Mode. |
+| [`src/robot_main/direct_mode.h`](src/robot_main/direct_mode.h) | **Zero-Hop Direct Cloud Engine**: Uses 8 MB Octal PSRAM buffers (`g_directWavPsram`, `g_directReqPsram`, `g_directRespPsram`, `g_directPcmPsram`) + `mbedtls_base64` to call **Gemini STT**, **Gemini or Chit LLM**, and **Gemini TTS** directly from the ESP32-S3 over verified TLS (`GTS Root R4`/`R1` & `ISRG`). |
+| [`src/robot_main/robot_config.h`](src/robot_main/robot_config.h) | **Live Over-the-Air Config API (`GET/POST /config`)**: Persists `mode`, `llm_provider`, `vad_enabled`, models, voice, URLs, and API keys in ESP32 NVS Flash (`Preferences`), protected by Bearer authentication and constant-time token comparison, with secrets masked on `GET /config`. |
 | [`gateway/app.py`](gateway/app.py) | FastAPI server implementing `GET /health`, `POST /echo`, and `POST /talk` (plus `/voice/*` aliases for Caddy), Bearer authentication, per-device LRU session history (`X-Session-Id`), and pre-stream (`504`/`502`) + mid-stream exception guards. |
 | [`gateway/adapters.py`](gateway/adapters.py) | Implements `GeminiSTT`, `GeminiLLM`, `GeminiTTS` (`gemini-3.1-flash-lite` + `gemini-3.8-flash-tts`), `ChitLLM` (`POST /chat` with `X-API-Key`, `session_id` reuse, and `429` exponential backoff), `OpenAICompat*`, and `Mock*` adapters. |
 | [`gateway/test_gateway.py`](gateway/test_gateway.py) | Automated test suite verifying auth rejection (`401`), `/echo` odd-chunk streaming, `<400 ms` short-press filtering (`204`), per-device session isolation, odd-byte input alignment, upstream `504`/`502` handling, mid-stream LLM/TTS fault recovery, and the `ChitLLM` contract. |
@@ -233,22 +251,45 @@ Once `robot_main` is flashed and `uvicorn app:app --host 0.0.0.0 --port 8002` is
 
 ---
 
-### Step 6 — How to Switch Between Gemini and Your Own "Chit" Brain
+### Step 6 — Change Robot Settings Live Over Wi-Fi (`GET /config` & `POST /config`)
 
-Open `~/.robo_secrets/gateway.env` and change `LLM_PROVIDER`:
+When `robot_main` boots, it prints its local Config API address on Serial (e.g., `http://192.168.1.55/config`). You can inspect or update settings **live from your laptop or phone without re-flashing** (all changes are saved permanently in ESP32 NVS Flash):
 
-* **All-Gemini Mode (Default)**:
-  ```ini
-  STT_PROVIDER=gemini
-  LLM_PROVIDER=gemini
-  TTS_PROVIDER=gemini
-  ```
-* **Hybrid "Chit Brain" Mode (Gemini Ears & Voice + Your Custom Chit LLM at `https://api.chitt.online`)**:
-  ```ini
-  STT_PROVIDER=gemini
-  LLM_PROVIDER=chit
-  TTS_PROVIDER=gemini
-  ```
-Restart `uvicorn` (or your Docker container)—**no ESP32 firmware re-flash is ever needed when switching AI models or providers!**
+1. **Inspect Current Robot Config (API keys are automatically masked as `****xxxx`)**:
+   ```powershell
+   curl.exe http://<robot-ip>/config -H "Authorization: Bearer <YOUR_GATEWAY_BEARER_TOKEN>"
+   ```
 
-For deploying the Voice Gateway onto your AWS EC2 `t4g.small` instance alongside **Chit** behind Caddy, see [`gateway/DEPLOY.md`](gateway/DEPLOY.md).
+2. **Switch to Direct On-Chip Mode (Zero Middleman Hop — Robot Calls Gemini Directly)**:
+   ```powershell
+   curl.exe -X POST http://<robot-ip>/config `
+     -H "Authorization: Bearer <YOUR_GATEWAY_BEARER_TOKEN>" `
+     -H "Content-Type: application/json" `
+     -d '{"mode":"direct","llm_provider":"gemini","tts_voice":"Puck","vad_enabled":true}'
+   ```
+
+3. **Switch the Robot's Brain to Your Custom "Chit" API (`https://api.chitt.online/chat`) in Direct Mode**:
+   ```powershell
+   curl.exe -X POST http://<robot-ip>/config `
+     -H "Authorization: Bearer <YOUR_GATEWAY_BEARER_TOKEN>" `
+     -H "Content-Type: application/json" `
+     -d '{"mode":"direct","llm_provider":"chit","chit_api_key":"YOUR_CHIT_API_KEY"}'
+   ```
+
+4. **Switch to Gateway Mode (`gateway/app.py` for Sentence-by-Sentence Streaming)**:
+   ```powershell
+   curl.exe -X POST http://<robot-ip>/config `
+     -H "Authorization: Bearer <YOUR_GATEWAY_BEARER_TOKEN>" `
+     -H "Content-Type: application/json" `
+     -d '{"mode":"gateway","gateway_url":"http://192.168.1.40:8002"}'
+   ```
+
+5. **Factory Reset NVS Back to Compile-Time Defaults**:
+   ```powershell
+   curl.exe -X POST http://<robot-ip>/config `
+     -H "Authorization: Bearer <YOUR_GATEWAY_BEARER_TOKEN>" `
+     -H "Content-Type: application/json" `
+     -d '{"factory_reset":true}'
+   ```
+
+For deploying the optional Voice Gateway onto your AWS EC2 `t4g.small` instance alongside **Chit** behind Caddy, see [`gateway/DEPLOY.md`](gateway/DEPLOY.md).
