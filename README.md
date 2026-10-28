@@ -77,7 +77,9 @@ Your `ESP32-S3-WROOM-1-N16R8` has **8 MB of Octal PSRAM**, which allows `robot_m
 ### 📋 4-Step Pre-Flight Checklist (When Your Packages Arrive)
 
 Before plugging anything into USB or power, verify these 4 items:
-1. **Verify the ESP32-S3 Metal Can**: Look closely at the laser engraving on the metal shield. It **must** read `ESP32-S3-WROOM-1-N16R8` or `N8R8`. If it reads `N4` (0 PSRAM) or `ESP32-WROOM-32` (old ESP32), initiate an immediate return.
+1. **Verify the ESP32-S3 Metal Can**: Look closely at the laser engraving on the metal shield. It **must** read `ESP32-S3-WROOM-1-N16R8` (preferred) or `N8R8` (8 MB Octal PSRAM).
+   * ⚠️ **Flash Setting for `N8R8`**: The project defaults to `16MB` flash (`default_16MB.csv`). If your board is an `N8R8` (8 MB Flash), you **must** change `platformio.ini` lines 19–20 to `board_upload.flash_size = 8MB` and `board_build.partitions = default_8MB.csv` before uploading, or the chip will continuously bootloop!
+   * If the shield reads `N4` (0 PSRAM) or `ESP32-WROOM-32` (old ESP32), initiate an immediate return.
 2. **Solder the Header Pins**: Solder the 6-pin header on the `INMP441` and the 7-pin header on the `MAX98357A`. Solder joints should look like clean, shiny little cones.
 3. **Power Rails Grounding**: Double check that `INMP441` and `ST7789` are plugged into the **3.3V** rail, and `MAX98357A` is plugged into the **5V (`VBUS`)** rail with the `1000 µF` capacitor installed across `5V` and `GND`.
 4. **USB Port Selection**: When connecting to your PC/laptop, plug into the USB-C port labeled **`USB`** (native USB CDC on GPIO 19/20). The port labeled `UART` will not display the runtime serial logs.
@@ -184,9 +186,15 @@ Create a folder named `.robo_secrets` in your user home directory (`C:\Users\<Yo
    #pragma once
    #define WIFI_SSID             "YOUR_2.4GHZ_WIFI_NAME"
    #define WIFI_PASSWORD         "YOUR_WIFI_PASSWORD"
-   // Use your laptop's LAN IP (ipconfig) during breadboard testing, or "https://api.chitt.online/voice" on EC2:
+
+   // Gateway Server settings (used in Gateway Mode and in Gates 6-7):
    #define GATEWAY_BASE_URL      "http://192.168.1.40:8002"
    #define GATEWAY_BEARER_TOKEN  "your-random-32-byte-hex-token"
+
+   // Operating mode & Direct On-Chip cloud credentials:
+   #define ROBOT_DEFAULT_MODE    "direct"   // "direct" (no Gateway hop) or "gateway"
+   #define DIRECT_GEMINI_API_KEY "your-google-ai-studio-api-key"
+   #define DIRECT_CHIT_API_KEY   ""         // optional custom Chit API key
    ```
    *(Make sure `GATEWAY_BEARER_TOKEN` is identical in both files!)*
 
@@ -284,17 +292,24 @@ python -m platformio run -e robot_main -t upload -t monitor
 
 ### Step 5 — How to Use Your Robot (`robot_main`)
 
-Once `robot_main` is flashed and `uvicorn app:app --host 0.0.0.0 --port 8002` is running:
+Before booting, ensure your chosen operating mode prerequisites are met:
+* **Mode A — Direct On-Chip Cloud Mode (`mode = "direct"`, Default)**:
+  - Requires a valid `DIRECT_GEMINI_API_KEY` in `~/.robo_secrets/robot_secrets.h` (or configured live via `POST /config`).
+  - **No local gateway needed**: The ESP32 connects directly to Google Gemini APIs over TLS.
+* **Mode B — Voice Gateway Mode (`mode = "gateway"`)**:
+  - Requires the local FastAPI Voice Gateway running on your laptop (`uvicorn app:app --host 0.0.0.0 --port 8002` from Step 2) with `GATEWAY_BASE_URL` reachable on your LAN.
+
+Once `robot_main` is booted in either mode:
 1. **Boot & Calibration (`STATE_BOOT` → `STATE_IDLE`)**:
    * The robot displays amber booting eyes while connecting to Wi-Fi and syncing NTP time, then samples ~0.5 seconds of ambient room noise to calibrate its Hands-Free VAD trigger threshold.
    * When ready, the eyes turn **cyan** and blink naturally (`STATE_IDLE`).
 2. **Two Ways to Talk to the Robot**:
-   * **Hands-Free Always-Listening Mode (Default ON)**: Just start speaking! When your voice exceeds the calibrated room noise floor for ~48 ms, the eyes turn **wide green (`STATE_LISTENING`)**, prepending the last **250 ms** of pre-roll audio from PSRAM so your first syllable is never cut off. Stop speaking for **900 ms** and the robot automatically sends your audio to `/talk`.
+   * **Hands-Free Always-Listening Mode (Default ON)**: Just start speaking! When your voice exceeds the calibrated room noise floor for ~48 ms, the eyes turn **wide green (`STATE_LISTENING`)**, prepending the last **250 ms** of pre-roll audio from PSRAM so your first syllable is never cut off. Stop speaking for **900 ms** and the robot automatically processes your voice.
    * **Push-to-Talk Override (`GPIO 1` Hold >= 400 ms)**: Hold down the `GPIO 1` button at any time, speak, and release.
    * **Toggle Hands-Free VAD ON/OFF (`GPIO 1` Quick Tap < 350 ms)**: Tap the `GPIO 1` button briefly while idle to switch between **Hands-Free Always-Listening Mode** and **Push-to-Talk-Only Mode** (recalibrates noise floor on enable).
 3. **Thinking & Speaking (`STATE_THINKING` → `STATE_SPEAKING`)**:
-   * Eyes turn **amber and scan left-right (`STATE_THINKING`)** while the Gateway transcribes and fetches Sentence 1.
-   * Once 400 ms of 24 kHz audio is pre-buffered in PSRAM, the robot speaks while its **cyan mouth and eyes bounce in sync with voice energy (`STATE_SPEAKING`)**.
+   * Eyes turn **amber and scan left-right (`STATE_THINKING`)** while the robot processes your query (Direct Mode: ESP32 calls Gemini STT → LLM → TTS directly; Gateway Mode: streams audio to `/talk` and receives 24 kHz chunks).
+   * Once audio is pre-buffered in PSRAM (400 ms), the robot speaks while its **cyan mouth and eyes bounce in sync with voice energy (`STATE_SPEAKING`)**.
    * After speaking, the robot waits **450 ms** and flushes its mic DMA buffer (`flushMicAfterPlayback()`) so it never echoes its own voice.
 
 ---
