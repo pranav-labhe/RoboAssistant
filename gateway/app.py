@@ -1,4 +1,6 @@
 import os
+import re
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator, Optional
@@ -27,7 +29,8 @@ load_dotenv()
 #                                        Optional header: X-Action: WAVE
 # ============================================================================
 
-MAX_HISTORY_MESSAGES = 6  # Last 3 user+assistant turns
+MAX_HISTORY_MESSAGES = 6  # Last 3 user+assistant turns per session
+MAX_SESSIONS = 32         # Bounded LRU session store for 2 GiB EC2 safety
 
 
 class GatewayState:
@@ -37,7 +40,17 @@ class GatewayState:
         self.llm: Optional[LLM] = None
         self.tts: Optional[TTS] = None
         self.provider_info: dict[str, str] = {}
-        self.history: list[dict[str, str]] = []
+        self.sessions: OrderedDict[str, list[dict[str, str]]] = OrderedDict()
+
+    def get_session_history(self, session_id: str) -> list[dict[str, str]]:
+        clean_id = re.sub(r"[^a-zA-Z0-9_\-]", "", session_id or "")[:64] or "default-robot"
+        if clean_id in self.sessions:
+            self.sessions.move_to_end(clean_id)
+            return self.sessions[clean_id]
+        if len(self.sessions) >= MAX_SESSIONS:
+            self.sessions.popitem(last=False)
+        self.sessions[clean_id] = []
+        return self.sessions[clean_id]
 
 
 state = GatewayState()
@@ -68,11 +81,15 @@ def verify_bearer_token(authorization: Optional[str]) -> None:
 
 @app.get("/health")
 @app.get("/voice/health")
-async def health() -> dict[str, object]:
+async def health(
+    x_session_id: Optional[str] = Header(default="default-robot"),
+) -> dict[str, object]:
+    session_hist = state.sessions.get(x_session_id or "default-robot", [])
     return {
         "status": "ok",
         "providers": state.provider_info,
-        "history_turns": len(state.history) // 2,
+        "active_sessions": len(state.sessions),
+        "history_turns": len(session_hist) // 2,
     }
 
 
@@ -126,6 +143,7 @@ def extract_action_tag(sentence: str) -> tuple[Optional[str], str]:
 async def talk_pipeline(
     request: Request,
     authorization: Optional[str] = Header(default=None),
+    x_session_id: Optional[str] = Header(default="default-robot"),
 ) -> Response:
     """
     Gate 8 & 9:
@@ -139,16 +157,33 @@ async def talk_pipeline(
         return Response(status_code=204)
 
     assert state.stt is not None and state.llm is not None and state.tts is not None
+    session_history = state.get_session_history(x_session_id or "default-robot")
 
-    transcript = (await state.stt.transcribe(pcm16k)).strip()
+    try:
+        transcript = (await state.stt.transcribe(pcm16k)).strip()
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="Upstream STT timed out") from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream STT error ({exc.response.status_code})",
+        ) from exc
+
     if not transcript:
         return Response(status_code=204)
 
-    sentence_iter = state.llm.reply(state.history, transcript).__aiter__()
+    sentence_iter = state.llm.reply(session_history, transcript).__aiter__()
     try:
         first_raw_sentence = await sentence_iter.__anext__()
     except StopAsyncIteration:
         return Response(status_code=204)
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="Upstream LLM timed out") from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream LLM error ({exc.response.status_code})",
+        ) from exc
 
     action_tag, first_sentence = extract_action_tag(first_raw_sentence)
     headers = {"X-Sample-Rate": "24000"}
@@ -173,10 +208,10 @@ async def talk_pipeline(
 
         full_reply = " ".join(collected_sentences).strip()
         if full_reply:
-            state.history.append({"role": "user", "content": transcript})
-            state.history.append({"role": "assistant", "content": full_reply})
-            if len(state.history) > MAX_HISTORY_MESSAGES:
-                del state.history[:-MAX_HISTORY_MESSAGES]
+            session_history.append({"role": "user", "content": transcript})
+            session_history.append({"role": "assistant", "content": full_reply})
+            if len(session_history) > MAX_HISTORY_MESSAGES:
+                del session_history[:-MAX_HISTORY_MESSAGES]
 
     return StreamingResponse(
         stream_sentence_pcm(),

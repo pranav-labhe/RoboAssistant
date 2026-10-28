@@ -13,7 +13,7 @@ os.environ["TTS_PROVIDER"] = "mock"
 import httpx
 import json
 from adapters import ChitLLM
-from app import app, lifespan
+from app import app, lifespan, state
 
 
 def make_test_16k_pcm(duration_sec: float = 1.0, freq_hz: float = 440.0) -> bytes:
@@ -58,19 +58,53 @@ async def run_tests() -> None:
             assert r_short.status_code == 204
             print("[PASS] POST /talk (< 400 ms) ignored with HTTP 204")
 
-            # 5. Test /talk full streaming pipeline (STT -> LLM -> TTS)
-            r_talk = await client.post("/talk", headers=headers, content=pcm_in)
+            # 5. Test /talk full streaming pipeline + per-device X-Session-Id isolation
+            headers_alpha = {**headers, "X-Session-Id": "esp32s3-alpha"}
+            headers_beta = {**headers, "X-Session-Id": "esp32s3-beta"}
+            r_talk = await client.post("/talk", headers=headers_alpha, content=pcm_in)
             assert r_talk.status_code == 200
             assert r_talk.headers.get("X-Sample-Rate") == "24000"
             assert r_talk.headers.get("X-Action") == "WAVE"
             assert "X-Reply-Text" not in r_talk.headers
             assert len(r_talk.content) > 0 and len(r_talk.content) % 2 == 0
+            assert len(state.get_session_history("esp32s3-alpha")) == 2
+            assert len(state.get_session_history("esp32s3-beta")) == 0
             print(
                 f"[PASS] POST /talk -> X-Sample-Rate={r_talk.headers.get('X-Sample-Rate')}, "
-                f"X-Action={r_talk.headers.get('X-Action')}, "
+                f"X-Action={r_talk.headers.get('X-Action')}, per-device X-Session-Id isolated, "
                 f"received {len(r_talk.content)} bytes of 24 kHz s16le PCM "
                 f"({len(r_talk.content) / (24000 * 2):.2f} sec)"
             )
+
+            # 6. Test odd-byte PCM input alignment guard (32001 bytes -> 32000 even bytes)
+            odd_pcm = pcm_in + b"\x7f"
+            r_odd = await client.post("/echo", headers=headers, content=odd_pcm)
+            assert r_odd.status_code == 200
+            assert len(r_odd.content) == len(pcm_in) and len(r_odd.content) % 2 == 0
+            print("[PASS] Odd-byte PCM payload (32001B) cleanly aligned to 32000B")
+
+            # 7. Test upstream timeout -> HTTP 504 & upstream error -> HTTP 502
+            orig_stt = state.stt
+
+            class TimeoutSTT:
+                async def transcribe(self, pcm16k: bytes) -> str:
+                    raise httpx.ReadTimeout("Simulated STT timeout")
+
+            class BadGatewaySTT:
+                async def transcribe(self, pcm16k: bytes) -> str:
+                    req = httpx.Request("POST", "https://example.com/stt")
+                    resp = httpx.Response(503, request=req)
+                    raise httpx.HTTPStatusError("Service Unavailable", request=req, response=resp)
+
+            state.stt = TimeoutSTT()
+            r_timeout = await client.post("/talk", headers=headers_beta, content=pcm_in)
+            assert r_timeout.status_code == 504, f"Expected 504, got {r_timeout.status_code}"
+
+            state.stt = BadGatewaySTT()
+            r_badgw = await client.post("/talk", headers=headers_beta, content=pcm_in)
+            assert r_badgw.status_code == 502, f"Expected 502, got {r_badgw.status_code}"
+            state.stt = orig_stt
+            print("[PASS] Upstream Timeout (HTTP 504) & Upstream 503 Error (HTTP 502) handled cleanly")
 
     # 6. Test ChitLLM strict API contract (X-API-Key, session_id persistence, 429 retry)
     call_count = 0

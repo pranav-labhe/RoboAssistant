@@ -496,6 +496,7 @@ static void processTalkTurn(size_t sampleCount) {
     const char* headerKeys[] = {"X-Sample-Rate", "X-Action"};
     http.collectHeaders(headerKeys, 2);
     http.addHeader("Authorization", String("Bearer ") + GATEWAY_BEARER_TOKEN);
+    http.addHeader("X-Session-Id", String("esp32s3-") + String(static_cast<uint32_t>(ESP.getEfuseMac() & 0xFFFFFFFFULL), HEX));
     http.addHeader("Content-Type", "audio/pcm;rate=16000");
 
     // Zero automatic retries on error so a failure never loops and burns quota
