@@ -239,7 +239,7 @@ Create a folder named `.robo_secrets` in your user home directory (`C:\Users\<Yo
 | | `SD` (DOUT) | `GPIO 6` | `I2S_NUM_0` data in |
 | **MAX98357A Amp** | `VIN` / `GND` | `5V` / `GND` | Add `1000 µF` cap across `5V–GND` |
 | | `GAIN` | Floating (or `VIN`) | Leave floating for **9 dB default** (or wire direct to `VIN` for **6 dB**, 100kΩ to `VIN` for **3 dB**) |
-| | `SD` | Floating | Firmware outputs stereo `[L, L]` frames |
+| | `SD` (SD_MODE) | Floating (or 100kΩ to `VIN`) | Check breakout pull-up: leave floating if board has onboard pull-up to `VIN`; if module lacks pull-up or remains muted, connect `SD` to `VIN` through a 100 kΩ resistor. Firmware outputs stereo `[L, L]` frames. |
 | | `BCLK` | `GPIO 15` | `I2S_NUM_1` bit clock |
 | | `LRC` | `GPIO 16` | `I2S_NUM_1` word select |
 | | `DIN` | `GPIO 7` | `I2S_NUM_1` data out |
