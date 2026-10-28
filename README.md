@@ -1,49 +1,254 @@
-# 🤖 RoboAssistant — ESP32-S3 Tabletop Voice Robot & Provider-Agnostic Gateway
+# 🤖 RoboAssistant — ESP32-S3 Tabletop Voice Robot & Provider-Agnostic Voice Gateway
 
-A compact tabletop voice robot (~20–30 cm, inspired by OttoRobot + XiaoZhi AI) built on the **`ESP32-S3-WROOM-1-N16R8`** (16 MB Flash, 8 MB Octal PSRAM) with a provider-agnostic FastAPI **Voice Gateway** (`STT → LLM → TTS`).
-
----
-
-## ✨ Key Architectural Highlights
-
-* **Zero Cloud API Keys on the Chip**: The ESP32-S3 firmware holds zero OpenAI or Gemini keys and never parses large JSON/base64 payloads in SRAM. It talks exclusively to your thin Python Gateway (`/health`, `/echo`, `/talk`) over verified TLS (`ISRG Root X2`, `ISRG Root YE`, `ISRG Root X1`, `GlobalSign ECC Root CA - R4`).
-* **Outside-Repo Secrets Isolation**: All API keys (`GEMINI_API_KEY`, `CHIT_API_KEY`) and Wi-Fi credentials live outside the repository in `~/.robo_secrets/` (`gateway.env` and `robot_secrets.h`) so they can never be committed to Git.
-* **Pluggable 3-Stage Voice Pipeline (`gateway/`)**:
-  * **STT**: Google Gemini (`gemini-3.1-flash-lite`), OpenAI (`whisper-1`), or `mock`
-  * **LLM**: Google Gemini (`gemini-3.1-flash-lite`), **Chit** (`https://api.chitt.online` `/chat` with strict schema + `session_id` reuse + `HTTP 429` exponential backoff), OpenAI-compatible (`/v1/chat/completions`), or `mock`
-  * **TTS**: Google Gemini (`gemini-3.8-flash-tts`, 24 kHz 16-bit mono PCM), OpenAI (`tts-1`), or `mock`
-* **12-Gate Hardware & Firmware Verification Protocol**: Isolated PlatformIO build environments (`gate1_board` through `gate7_echo` + `robot_main`) pinned to `espressif32 @ 6.9.0` (Arduino-ESP32 v2.0.17).
-* **Dual-Core FreeRTOS Firmware (`src/robot_main/main.cpp`)**:
-  * **Core 0 (`DisplayTask`, priority 1)**: 30 FPS non-blocking LovyanGFX PSRAM sprite eye expressions (`BOOT`, `IDLE`, `LISTENING`, `THINKING`, `SPEAKING`, `ERROR`).
-  * **Core 1 (`loop()`)**: Push-to-Talk (`GPIO 1`), 16 kHz `INMP441` capture with DC-offset removal into PSRAM, 400 ms PSRAM pre-buffer, 1-byte odd-chunk carryover guard, and stereo `[L, L]` `MAX98357A` playback.
+A compact tabletop voice robot (~20–30 cm, inspired by OttoRobot + XiaoZhi AI) powered by an **`ESP32-S3-WROOM-1-N16R8`** (16 MB Flash, 8 MB Octal PSRAM) and a thin, provider-agnostic Python FastAPI **Voice Gateway** (`STT → LLM → TTS`).
 
 ---
 
-## 📂 Repository Structure
+## 🧭 1. How the System Works (Architecture)
 
-* [`ROADMAP.md`](ROADMAP.md) — Master BOM, conflict-free GPIO pin map, and 12-Gate verification checklist
-* [`platformio.ini`](platformio.ini) — Pinned `espressif32 @ 6.9.0` configuration for all 8 firmware targets
-* [`include/pins.h`](include/pins.h) — Hardware GPIO definitions (`INMP441`, `MAX98357A`, `ST7789`, PTT `GPIO 1`, Servo `GPIO 18`)
-* [`include/certs.h`](include/certs.h) — Multi-root TLS CA bundle (`ISRG Root X2`, `Root YE`, `ISRG Root X1`, `GlobalSign ECC Root CA - R4`)
-* [`src/`](src/) — Gate 1–7 hardware validation sketches and full `robot_main` firmware
-* [`gateway/`](gateway/) — FastAPI Voice Gateway (`app.py`, `adapters.py`, `Containerfile`, `DEPLOY.md`, unit & live tests)
-
----
-
-## 🚀 Quickstart
-
-### 1. Run the Voice Gateway Locally
-```powershell
-cd c:\Robo\gateway
-python test_gateway.py
-python test_live_gemini.py
-uvicorn app:app --host 0.0.0.0 --port 8002
+```
+┌───────────────────────────────────────────┐         HTTP / Verified HTTPS         ┌──────────────────────────────────────────────┐
+│          ESP32-S3 Tabletop Robot          │ ────────────────────────────────────► │         Python FastAPI Voice Gateway         │
+│                                           │   POST /talk (16 kHz s16le mono PCM)  │               (gateway/app.py)               │
+│ • Core 0: 30 FPS ST7789 Eye Animation     │   Headers:                            │                                              │
+│ • Core 1: Audio I2S + VAD/PTT + Network   │     Authorization: Bearer <TOKEN>     │  1. STT Adapter (Gemini / OpenAI / Mock)     │
+│ • INMP441 Mic (16 kHz RX + DC blocker)    │     X-Session-Id: esp32s3-<MAC>       │  2. LLM Adapter (Gemini / Chit / OpenAI)     │
+│ • MAX98357A Amp (24 kHz Stereo [L, L] TX) │ ◄──────────────────────────────────── │  3. TTS Adapter (Gemini 24kHz PCM / OpenAI)  │
+│ • Zero Cloud API Keys on the Chip         │   200 OK Chunked Stream (24 kHz PCM)  │  • Per-device session memory (X-Session-Id)  │
+└───────────────────────────────────────────┘   X-Sample-Rate: 24000, X-Action: WAVE└──────────────────────────────────────────────┘
 ```
 
-### 2. Compile All 8 Firmware Environments
+* **Zero Cloud Keys on the Microcontroller**: The ESP32-S3 never calls OpenAI or Google directly and never parses multi-megabyte JSON/base64 strings in SRAM. It sends raw 16 kHz PCM audio to your Gateway and plays back raw streamed 24 kHz PCM audio.
+* **Outside-Repo Secrets Isolation**: All sensitive credentials (Wi-Fi password, Gateway Bearer token, `GEMINI_API_KEY`, `CHIT_API_KEY`) live **outside** the Git repository in `~/.robo_secrets/` (`C:\Users\<Username>\.robo_secrets\`).
+
+---
+
+## 📂 2. Purpose of Every File in This Repository
+
+```text
+RoboAssistant/
+├── README.md                        # Complete How-To Guide & file-by-file reference (this file)
+├── ROADMAP.md                       # Master BOM (parts list), pin map, and 12-Gate engineering checklist
+├── platformio.ini                   # Pinned PlatformIO build config (espressif32 @ 6.9.0) with 8 environments
+├── .gitignore                       # Blocks build artifacts, audio scratch files, and any secret files from Git
+│
+├── scripts/
+│   └── load_secrets_inc.py          # Pre-build script that auto-discovers ~/.robo_secrets across any OS/user
+│
+├── include/
+│   ├── pins.h                       # Single source of truth for all ESP32-S3 GPIOs & hardware toggles
+│   ├── certs.h                      # Multi-root TLS CA bundle (ISRG Root X2, Root YE, ISRG Root X1, GlobalSign R4)
+│   └── secrets.h.example            # Template showing what goes inside ~/.robo_secrets/robot_secrets.h
+│
+├── src/
+│   ├── gate1_board/main.cpp         # Gate 1: Verifies ESP32-S3 chip, 16 MB Flash, and 8 MB Octal PSRAM R/W
+│   ├── gate2_display/main.cpp       # Gate 2: Verifies ST7789 240x240 TFT & 30+ FPS PSRAM blinking eye sprite
+│   ├── gate3_mic/main.cpp           # Gate 3: Verifies INMP441 I2S mic (16 kHz), DC-blocker, and Serial Plotter RMS
+│   ├── gate4_speaker/main.cpp       # Gate 4: Verifies MAX98357A amp + speaker (24 kHz stereo [L,L], zero brownout)
+│   ├── gate5_loopback/main.cpp      # Gate 5: Records 3s from mic into PSRAM on GPIO 1 hold & plays it back locally
+│   ├── gate6_health/main.cpp        # Gate 6: Verifies 2.4 GHz Wi-Fi, NTP clock sync, and TLS GET /health
+│   ├── gate7_echo/main.cpp          # Gate 7: Streams 16 kHz mic audio to POST /echo & plays back chunked response
+│   └── robot_main/main.cpp          # Gates 9–12 + VAD: Full dual-core voice robot (Hands-Free VAD + PTT + Face + TTS)
+│
+└── gateway/
+    ├── app.py                       # FastAPI server exposing /health, /echo, and /talk with per-device sessions
+    ├── adapters.py                  # Pluggable async adapters for Gemini, Chit (api.chitt.online), OpenAI, and Mock
+    ├── requirements.txt             # Lightweight Python dependencies (fastapi, uvicorn, httpx, python-dotenv)
+    ├── .env.example                 # Template showing what goes inside ~/.robo_secrets/gateway.env
+    ├── test_gateway.py              # Offline unit & fault-injection test suite (auth, odd-byte, 504/502, mid-stream, Chit)
+    ├── test_live_gemini.py          # Live end-to-end test using your real Gemini key (plays voice on laptop speakers)
+    ├── Containerfile                # Lightweight Python 3.13 container build file for AWS EC2 deployment
+    └── DEPLOY.md                    # Step-by-step instructions to deploy alongside Chit behind Caddy on AWS EC2
+```
+
+### Detailed File Reference Table
+
+| File Path | Purpose & When You Touch It |
+| :--- | :--- |
+| [`README.md`](README.md) | Step-by-step setup, wiring, flashing, and operational guide. |
+| [`ROADMAP.md`](ROADMAP.md) | Shopping list (Phase 0 BOM with ₹ prices and soldering notes), forbidden ESP32-S3 pins, and pass/fail criteria for all 12 verification gates. |
+| [`platformio.ini`](platformio.ini) | Pins `espressif32 @ 6.9.0` (Arduino-ESP32 v2.0.17 legacy I²S driver) and defines 8 isolated build targets (`gate1_board` through `robot_main`). Edit lines 19–20 only if you buy an `N8R8` (8 MB Flash) board instead of `N16R8` (16 MB Flash). |
+| [`scripts/load_secrets_inc.py`](scripts/load_secrets_inc.py) | Automatically adds `~/.robo_secrets` (or `$ROBO_SECRETS_DIR`) to the C++ include path at compile time so no Windows username is ever hardcoded in `platformio.ini`. |
+| [`include/pins.h`](include/pins.h) | Defines every GPIO pin (`INMP441`, `MAX98357A`, `ST7789`, `GPIO 1` button, `GPIO 18` servo) plus three 1-line toggles: `TFT_HAS_CS_PIN` (`1` for 8-pin display, `0` for 7-pin CS-less display), `ENABLE_AUTO_VAD_DEFAULT` (`1` for hands-free listening on boot), and `ENABLE_SERVO_ARM` (`0` until external 5V 2A power is attached). |
+| [`include/certs.h`](include/certs.h) | Pinned Root CA certificates (`ISRG Root X2`, `ISRG Root YE`, `ISRG Root X1`, `GlobalSign ECC Root CA - R4`) used by `WiFiClientSecure` so HTTPS never uses `setInsecure()`. |
+| [`include/secrets.h.example`](include/secrets.h.example) | Safe example template for `~/.robo_secrets/robot_secrets.h`. |
+| [`src/gate1_board/main.cpp`](src/gate1_board/main.cpp) | **Hardware Test 1**: Prints chip model, Flash size, and PSRAM size, and runs a 1 MB R/W verification across Octal PSRAM. Run this immediately when your ESP32-S3 arrives. |
+| [`src/gate2_display/main.cpp`](src/gate2_display/main.cpp) | **Hardware Test 2**: Initializes the ST7789 240×240 display via LovyanGFX and animates blinking cyan eyes from a PSRAM sprite at ~33 FPS. |
+| [`src/gate3_mic/main.cpp`](src/gate3_mic/main.cpp) | **Hardware Test 3**: Reads 16 kHz 32-bit I²S samples from `INMP441` on `I2S_NUM_0`, removes DC offset via a fixed-point IIR filter, and prints live RMS + peak audio levels for the Serial Plotter. |
+| [`src/gate4_speaker/main.cpp`](src/gate4_speaker/main.cpp) | **Hardware Test 4**: Plays a 440 Hz tone and two-note chime at 24 kHz stereo `[L, L]` on `MAX98357A` (`I2S_NUM_1`) with click-free attack/release envelopes to verify USB power stability. |
+| [`src/gate5_loopback/main.cpp`](src/gate5_loopback/main.cpp) | **Hardware Test 5**: Offline voice recorder—hold `GPIO 1` to record up to 3 seconds into PSRAM (`96 KB`), release to hear your own voice played back through the speaker. |
+| [`src/gate6_health/main.cpp`](src/gate6_health/main.cpp) | **Network Test 6**: Connects to 2.4 GHz Wi-Fi, syncs the ESP32 clock via NTP (required for TLS certificate validation), and calls `GET /health` every 10 seconds while monitoring free heap. |
+| [`src/gate7_echo/main.cpp`](src/gate7_echo/main.cpp) | **Network Test 7**: Sends recorded 16 kHz PCM audio to `POST /echo` and streams the chunked 16 kHz response back through the 400 ms PSRAM pre-buffer + 1-byte odd-chunk alignment guard. |
+| [`src/robot_main/main.cpp`](src/robot_main/main.cpp) | **Production Firmware**: Full dual-core voice robot combining Core 0 30 FPS eye expressions (`BOOT`, `IDLE`, `LISTENING`, `THINKING`, `SPEAKING`, `ERROR`) with Core 1 Hands-Free Always-Listening Energy VAD (250 ms pre-roll, auto noise-floor calibration, 900 ms silence hangover, 450 ms half-duplex post-playback echo guard) + `GPIO 1` Push-to-Talk override. |
+| [`gateway/app.py`](gateway/app.py) | FastAPI server implementing `GET /health`, `POST /echo`, and `POST /talk` (plus `/voice/*` aliases for Caddy), Bearer authentication, per-device LRU session history (`X-Session-Id`), and pre-stream (`504`/`502`) + mid-stream exception guards. |
+| [`gateway/adapters.py`](gateway/adapters.py) | Implements `GeminiSTT`, `GeminiLLM`, `GeminiTTS` (`gemini-3.1-flash-lite` + `gemini-3.8-flash-tts`), `ChitLLM` (`POST /chat` with `X-API-Key`, `session_id` reuse, and `429` exponential backoff), `OpenAICompat*`, and `Mock*` adapters. |
+| [`gateway/test_gateway.py`](gateway/test_gateway.py) | Automated test suite verifying auth rejection (`401`), `/echo` odd-chunk streaming, `<400 ms` short-press filtering (`204`), per-device session isolation, odd-byte input alignment, upstream `504`/`502` handling, mid-stream LLM/TTS fault recovery, and the `ChitLLM` contract. |
+| [`gateway/test_live_gemini.py`](gateway/test_live_gemini.py) | Live end-to-end test that calls Google's Gemini API with your key, plays the synthesized 24 kHz robot voice on your laptop speakers, and tests the full HTTP `POST /talk` pipeline. |
+| [`gateway/Containerfile`](gateway/Containerfile) | Docker/Podman build file for running the Gateway as a non-root user on your AWS EC2 `t4g.small` instance. |
+| [`gateway/DEPLOY.md`](gateway/DEPLOY.md) | Step-by-step guide for local laptop execution and AWS EC2 (`t4g.small`) Docker + Caddy deployment alongside **Chit**. |
+
+---
+
+## 🛠️ 3. Complete Step-by-Step "How-To" Guide
+
+### Step 1 — Create Your Outside-Repo Secrets (`~/.robo_secrets/`)
+
+Create a folder named `.robo_secrets` in your user home directory (`C:\Users\<YourUsername>\.robo_secrets\` on Windows, or `~/.robo_secrets/` on macOS/Linux) containing two files:
+
+1. **`~/.robo_secrets/gateway.env`** (copied from [`gateway/.env.example`](gateway/.env.example)):
+   ```ini
+   GATEWAY_BEARER_TOKEN=your-random-32-byte-hex-token
+   STT_PROVIDER=gemini
+   LLM_PROVIDER=gemini
+   TTS_PROVIDER=gemini
+
+   GEMINI_API_KEY=your-google-ai-studio-api-key
+   GEMINI_STT_MODEL=gemini-3.1-flash-lite
+   GEMINI_LLM_MODEL=gemini-3.1-flash-lite
+   GEMINI_TTS_MODEL=gemini-3.8-flash-tts
+   GEMINI_TTS_VOICE=Puck
+
+   CHIT_BASE_URL=https://api.chitt.online
+   CHIT_API_KEY=your-chit-api-key
+   CHIT_THINK=false
+   ```
+
+2. **`~/.robo_secrets/robot_secrets.h`** (copied from [`include/secrets.h.example`](include/secrets.h.example)):
+   ```cpp
+   #pragma once
+   #define WIFI_SSID             "YOUR_2.4GHZ_WIFI_NAME"
+   #define WIFI_PASSWORD         "YOUR_WIFI_PASSWORD"
+   // Use your laptop's LAN IP (ipconfig) during breadboard testing, or "https://api.chitt.online/voice" on EC2:
+   #define GATEWAY_BASE_URL      "http://192.168.1.40:8002"
+   #define GATEWAY_BEARER_TOKEN  "your-random-32-byte-hex-token"
+   ```
+   *(Make sure `GATEWAY_BEARER_TOKEN` is identical in both files!)*
+
+---
+
+### Step 2 — Test & Run the Voice Gateway on Your Laptop (Zero Hardware Needed)
+
+1. Install Python dependencies:
+   ```powershell
+   cd c:\Robo\gateway
+   pip install -r requirements.txt
+   ```
+2. Run the offline unit & fault-injection test suite (9 tests):
+   ```powershell
+   python test_gateway.py
+   ```
+3. Run the live Gemini voice test (speaks aloud through your laptop speakers and tests `POST /talk`):
+   ```powershell
+   python test_live_gemini.py
+   ```
+4. Start the live Voice Gateway server on port `8002`:
+   ```powershell
+   uvicorn app:app --host 0.0.0.0 --port 8002
+   ```
+
+---
+
+### Step 3 — Wire the Hardware on the Breadboard
+
+> **Important Electrical Rules**:
+> * Power **`INMP441`** and **`ST7789`** from **`3.3V`** only.
+> * Power **`MAX98357A`** from **`5V` (`VBUS`)** and place a **`1000 µF` electrolytic capacitor** across the breadboard `5V` and `GND` rails (watch polarity: `-` stripe to `GND`).
+> * Place a **`0.1 µF` ceramic capacitor** right next to the `INMP441` `VDD` and `GND` pins.
+> * Connect the USB-C cable to the ESP32-S3 port labeled **`USB`** (native USB CDC on GPIO 19/20).
+
+| Module | Module Pin | ESP32-S3 Pin | Notes |
+| :--- | :--- | :--- | :--- |
+| **INMP441 Mic** | `VDD` / `GND` | `3.3V` / `GND` | Add `0.1 µF` cap across `VDD–GND` |
+| | `L/R` | `GND` | Selects Left channel |
+| | `SCK` (BCLK) | `GPIO 4` | `I2S_NUM_0` clock |
+| | `WS` (LRCLK) | `GPIO 5` | `I2S_NUM_0` word select |
+| | `SD` (DOUT) | `GPIO 6` | `I2S_NUM_0` data in |
+| **MAX98357A Amp** | `VIN` / `GND` | `5V` / `GND` | Add `1000 µF` cap across `5V–GND` |
+| | `GAIN` | `5V` (`VIN`) | Direct wire to `VIN` = **3 dB** (safest for USB power) |
+| | `SD` | Floating | Firmware outputs stereo `[L, L]` frames |
+| | `BCLK` | `GPIO 15` | `I2S_NUM_1` bit clock |
+| | `LRC` | `GPIO 16` | `I2S_NUM_1` word select |
+| | `DIN` | `GPIO 7` | `I2S_NUM_1` data out |
+| **ST7789 Display** | `VCC` / `GND` | `3.3V` / `GND` | 240×240 IPS SPI |
+| | `SDA` (MOSI) | `GPIO 11` | `SPI2_HOST` MOSI |
+| | `SCL` (SCLK) | `GPIO 12` | `SPI2_HOST` SCLK |
+| | `CS` | `GPIO 10` | If 7-pin display has no `CS`, set `TFT_HAS_CS_PIN 0` in `include/pins.h` |
+| | `DC` | `GPIO 9` | Data/Command |
+| | `RST` (RES) | `GPIO 14` | Reset |
+| | `BLK` (BL) | `GPIO 13` | Backlight PWM |
+| **PTT / Mode Button** | Pin A / Pin B | `GPIO 1` / `GND` | Uses internal pull-up (`INPUT_PULLUP`) |
+| **Servo Arm (Optional)** | `Signal` | `GPIO 18` | Power servo `VCC` from external 5V 2A supply (common `GND`) |
+
+---
+
+### Step 4 — Compile, Flash & Verify Each Hardware Gate in Order
+
+Run all commands from `c:\Robo`. **Never skip ahead**—verify each gate before flashing the next:
+
 ```powershell
-cd c:\Robo
+# 1. Pre-compile all 8 environments at once (optional sanity check):
 python -m platformio run -e gate1_board -e gate2_display -e gate3_mic -e gate4_speaker -e gate5_loopback -e gate6_health -e gate7_echo -e robot_main
+
+# 2. Flash Gate 1 (Board, 16MB Flash & 8MB Octal PSRAM check):
+python -m platformio run -e gate1_board -t upload -t monitor
+
+# 3. Flash Gate 2 (ST7789 Display & 30+ FPS blinking eye animation):
+python -m platformio run -e gate2_display -t upload -t monitor
+
+# 4. Flash Gate 3 (INMP441 Mic capture & DC-offset RMS printout):
+python -m platformio run -e gate3_mic -t upload -t monitor
+
+# 5. Flash Gate 4 (MAX98357A Speaker 440Hz tone & chime test):
+python -m platformio run -e gate4_speaker -t upload -t monitor
+
+# 6. Flash Gate 5 (Hold GPIO 1 to record 3s to PSRAM -> release to hear playback):
+python -m platformio run -e gate5_loopback -t upload -t monitor
+
+# 7. Flash Gate 6 (Wi-Fi + NTP clock sync + Gateway GET /health check):
+python -m platformio run -e gate6_health -t upload -t monitor
+
+# 8. Flash Gate 7 (Hold GPIO 1 -> stream 16kHz PCM to POST /echo -> hear echoed voice):
+python -m platformio run -e gate7_echo -t upload -t monitor
+
+# 9. Flash Production Robot Firmware (Full Dual-Core Hands-Free VAD + PTT + AI Voice):
+python -m platformio run -e robot_main -t upload -t monitor
 ```
 
-See [`gateway/DEPLOY.md`](gateway/DEPLOY.md) for AWS EC2 (`t4g.small`) Docker + Caddy deployment instructions alongside **Chit**.
+---
+
+### Step 5 — How to Use Your Robot (`robot_main`)
+
+Once `robot_main` is flashed and `uvicorn app:app --host 0.0.0.0 --port 8002` is running:
+1. **Boot & Calibration (`STATE_BOOT` → `STATE_IDLE`)**:
+   * The robot displays amber booting eyes while connecting to Wi-Fi and syncing NTP time, then samples ~0.5 seconds of ambient room noise to calibrate its Hands-Free VAD trigger threshold.
+   * When ready, the eyes turn **cyan** and blink naturally (`STATE_IDLE`).
+2. **Two Ways to Talk to the Robot**:
+   * **Hands-Free Always-Listening Mode (Default ON)**: Just start speaking! When your voice exceeds the calibrated room noise floor for ~48 ms, the eyes turn **wide green (`STATE_LISTENING`)**, prepending the last **250 ms** of pre-roll audio from PSRAM so your first syllable is never cut off. Stop speaking for **900 ms** and the robot automatically sends your audio to `/talk`.
+   * **Push-to-Talk Override (`GPIO 1` Hold >= 400 ms)**: Hold down the `GPIO 1` button at any time, speak, and release.
+   * **Toggle Hands-Free VAD ON/OFF (`GPIO 1` Quick Tap < 350 ms)**: Tap the `GPIO 1` button briefly while idle to switch between **Hands-Free Always-Listening Mode** and **Push-to-Talk-Only Mode** (recalibrates noise floor on enable).
+3. **Thinking & Speaking (`STATE_THINKING` → `STATE_SPEAKING`)**:
+   * Eyes turn **amber and scan left-right (`STATE_THINKING`)** while the Gateway transcribes and fetches Sentence 1.
+   * Once 400 ms of 24 kHz audio is pre-buffered in PSRAM, the robot speaks while its **cyan mouth and eyes bounce in sync with voice energy (`STATE_SPEAKING`)**.
+   * After speaking, the robot waits **450 ms** and flushes its mic DMA buffer (`flushMicAfterPlayback()`) so it never echoes its own voice.
+
+---
+
+### Step 6 — How to Switch Between Gemini and Your Own "Chit" Brain
+
+Open `~/.robo_secrets/gateway.env` and change `LLM_PROVIDER`:
+
+* **All-Gemini Mode (Default)**:
+  ```ini
+  STT_PROVIDER=gemini
+  LLM_PROVIDER=gemini
+  TTS_PROVIDER=gemini
+  ```
+* **Hybrid "Chit Brain" Mode (Gemini Ears & Voice + Your Custom Chit LLM at `https://api.chitt.online`)**:
+  ```ini
+  STT_PROVIDER=gemini
+  LLM_PROVIDER=chit
+  TTS_PROVIDER=gemini
+  ```
+Restart `uvicorn` (or your Docker container)—**no ESP32 firmware re-flash is ever needed when switching AI models or providers!**
+
+For deploying the Voice Gateway onto your AWS EC2 `t4g.small` instance alongside **Chit** behind Caddy, see [`gateway/DEPLOY.md`](gateway/DEPLOY.md).
