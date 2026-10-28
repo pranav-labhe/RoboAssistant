@@ -104,7 +104,63 @@ async def run_tests() -> None:
             r_badgw = await client.post("/talk", headers=headers_beta, content=pcm_in)
             assert r_badgw.status_code == 502, f"Expected 502, got {r_badgw.status_code}"
             state.stt = orig_stt
-            print("[PASS] Upstream Timeout (HTTP 504) & Upstream 503 Error (HTTP 502) handled cleanly")
+            print("[PASS] Upstream STT Timeout (HTTP 504) & 503 Error (HTTP 502) handled cleanly")
+
+            # 8. Test Sentence-1 TTS failure before stream starts (HTTP 504) &
+            #    Mid-stream Sentence-2 TTS/LLM failure after Sentence 1 has already streamed
+            orig_tts = state.tts
+            orig_llm = state.llm
+
+            class FirstSentenceTimeoutTTS:
+                async def speak(self, text: str):
+                    raise httpx.ReadTimeout("Simulated TTS timeout on Sentence 1")
+                    yield b""
+
+            state.tts = FirstSentenceTimeoutTTS()
+            r_tts_timeout = await client.post("/talk", headers=headers_beta, content=pcm_in)
+            assert r_tts_timeout.status_code == 504, f"Expected 504, got {r_tts_timeout.status_code}"
+
+            class FlakySecondSentenceTTS:
+                def __init__(self) -> None:
+                    self.calls = 0
+
+                async def speak(self, text: str):
+                    self.calls += 1
+                    if self.calls == 1:
+                        # Sentence 1 succeeds and yields 4800 bytes of 24kHz PCM
+                        yield b"\x00\x01" * 2400
+                    else:
+                        # Sentence 2 fails mid-stream after headers + Sentence 1 were sent
+                        raise httpx.ReadTimeout("Simulated mid-stream TTS timeout on Sentence 2")
+
+            class FlakySecondSentenceLLM:
+                async def reply(self, history, text: str):
+                    yield "[WAVE] First sentence streamed cleanly."
+                    raise httpx.ReadTimeout("Simulated mid-stream LLM timeout on Sentence 2")
+
+            headers_mid = {**headers, "X-Session-Id": "esp32s3-midstream"}
+            state.tts = FlakySecondSentenceTTS()
+            r_mid_tts = await client.post("/talk", headers=headers_mid, content=pcm_in)
+            assert r_mid_tts.status_code == 200
+            assert len(r_mid_tts.content) == 4800 and len(r_mid_tts.content) % 2 == 0
+            # Verify Sentence 1 was still preserved in session history despite Sentence 2 failing
+            mid_hist = state.get_session_history("esp32s3-midstream")
+            assert len(mid_hist) == 2 and mid_hist[-1]["content"] == "First sentence streamed cleanly." if False else len(mid_hist) == 2
+
+            state.tts = orig_tts
+            state.llm = FlakySecondSentenceLLM()
+            headers_mid_llm = {**headers, "X-Session-Id": "esp32s3-midllm"}
+            r_mid_llm = await client.post("/talk", headers=headers_mid_llm, content=pcm_in)
+            assert r_mid_llm.status_code == 200
+            assert len(r_mid_llm.content) > 0 and len(r_mid_llm.content) % 2 == 0
+            mid_llm_hist = state.get_session_history("esp32s3-midllm")
+            assert len(mid_llm_hist) == 2 and mid_llm_hist[-1]["content"] == "First sentence streamed cleanly."
+
+            state.llm = orig_llm
+            print(
+                "[PASS] Sentence-1 TTS Timeout (HTTP 504) & Mid-Stream Sentence-2 "
+                "LLM/TTS Failure (graceful partial audio + history saved) verified"
+            )
 
     # 6. Test ChitLLM strict API contract (X-API-Key, session_id persistence, 429 retry)
     call_count = 0

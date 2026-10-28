@@ -190,28 +190,56 @@ async def talk_pipeline(
     if action_tag:
         headers["X-Action"] = action_tag
 
+    # Pre-fetch the first TTS chunk of Sentence 1 BEFORE sending HTTP 200 headers.
+    # If Sentence 1 TTS times out or returns 5xx/429, we can still return clean 504/502!
+    first_tts_iter: Optional[AsyncIterator[bytes]] = None
+    first_pcm_chunk: bytes = b""
+    if first_sentence:
+        first_tts_iter = state.tts.speak(first_sentence).__aiter__()
+        try:
+            first_pcm_chunk = ensure_even_pcm_bytes(await first_tts_iter.__anext__())
+        except StopAsyncIteration:
+            first_tts_iter = None
+        except httpx.TimeoutException as exc:
+            raise HTTPException(status_code=504, detail="Upstream TTS timed out") from exc
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Upstream TTS error ({exc.response.status_code})",
+            ) from exc
+
     async def stream_sentence_pcm() -> AsyncIterator[bytes]:
         collected_sentences: list[str] = []
+        try:
+            if first_sentence and first_tts_iter is not None:
+                if first_pcm_chunk:
+                    yield first_pcm_chunk
+                async for pcm_chunk in first_tts_iter:
+                    even_chunk = ensure_even_pcm_bytes(pcm_chunk)
+                    if even_chunk:
+                        yield even_chunk
+                collected_sentences.append(first_sentence)
 
-        if first_sentence:
-            collected_sentences.append(first_sentence)
-            async for pcm_chunk in state.tts.speak(first_sentence):
-                yield pcm_chunk
-
-        async for next_raw_sentence in sentence_iter:
-            _, clean_sentence = extract_action_tag(next_raw_sentence)
-            if not clean_sentence:
-                continue
-            collected_sentences.append(clean_sentence)
-            async for pcm_chunk in state.tts.speak(clean_sentence):
-                yield pcm_chunk
-
-        full_reply = " ".join(collected_sentences).strip()
-        if full_reply:
-            session_history.append({"role": "user", "content": transcript})
-            session_history.append({"role": "assistant", "content": full_reply})
-            if len(session_history) > MAX_HISTORY_MESSAGES:
-                del session_history[:-MAX_HISTORY_MESSAGES]
+            async for next_raw_sentence in sentence_iter:
+                _, clean_sentence = extract_action_tag(next_raw_sentence)
+                if not clean_sentence:
+                    continue
+                async for pcm_chunk in state.tts.speak(clean_sentence):
+                    even_chunk = ensure_even_pcm_bytes(pcm_chunk)
+                    if even_chunk:
+                        yield even_chunk
+                collected_sentences.append(clean_sentence)
+        except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.RequestError):
+            # Mid-stream failure after HTTP 200 headers + Sentence 1 audio were already sent:
+            # terminate stream cleanly on an even-byte boundary without crashing ASGI.
+            pass
+        finally:
+            full_reply = " ".join(collected_sentences).strip()
+            if full_reply:
+                session_history.append({"role": "user", "content": transcript})
+                session_history.append({"role": "assistant", "content": full_reply})
+                if len(session_history) > MAX_HISTORY_MESSAGES:
+                    del session_history[:-MAX_HISTORY_MESSAGES]
 
     return StreamingResponse(
         stream_sentence_pcm(),

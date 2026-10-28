@@ -42,10 +42,13 @@
 #define PIN_TFT_RST     14
 #define PIN_TFT_BL      13  // Backlight
 
-// --- 4. Push-to-Talk Breadboard Button (Active LOW with INPUT_PULLUP) ---
+// --- 4. Push-to-Talk & Hands-Free VAD Mode Control (GPIO 1, Active LOW) ---
 // Uses GPIO 1 instead of boot-strapping GPIO 0 so holding the button during
 // a reset never traps the ESP32-S3 in ROM download mode.
-#define PIN_PTT_BTN     1
+//   - Hold GPIO 1 (>= 400 ms): Push-to-Talk manual recording
+//   - Quick tap GPIO 1 (< 350 ms): Toggles Hands-Free Always-Listening VAD ON/OFF
+#define PIN_PTT_BTN             1
+#define ENABLE_AUTO_VAD_DEFAULT 1
 
 // --- 5. Waving Arm Servo (Phase 5 Extra, External 5V 2A Supply) ---
 // Set ENABLE_SERVO_ARM to 1 only after connecting a dedicated 5V 2A supply!

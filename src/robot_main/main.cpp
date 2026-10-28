@@ -12,16 +12,20 @@
 #include "robot_secrets.h"
 
 // ============================================================================
-// Gates 9-12: Full Dual-Core Tabletop Voice Robot Firmware (`[env:robot_main]`)
+// Gates 9-12 + Phase 5 VAD: Dual-Core Tabletop Voice Robot (`[env:robot_main]`)
 // Build & Upload: pio run -e robot_main -t upload -t monitor
 // Architecture:
 //   - Core 0 (DisplayTask, priority 1): Non-blocking ~30 FPS LovyanGFX PSRAM eye
 //     expression state machine (BOOT, IDLE, LISTENING, THINKING, SPEAKING, ERROR);
-//     yields 30 ms per frame so Core 0 Wi-Fi/LwIP tasks run unimpeded.
-//   - Core 1 (Arduino loop() — Audio & Network): Push-to-Talk (GPIO 1, 30ms debounce,
-//     400ms min, 8s cap), INMP441 16 kHz capture into PSRAM (256 KB), HTTPS POST
-//     to Gateway `/talk`, 400 ms PSRAM pre-buffer, 1-byte odd-chunk alignment
-//     carryover, stereo [L, L] I2S speaker playback, and optional Servo Wave (GPIO 18).
+//     yields 33 ms per frame so Core 0 Wi-Fi/LwIP tasks run unimpeded.
+//   - Core 1 (Arduino loop() — Audio & Network):
+//     * Hands-Free Always-Listening Energy VAD (auto-calibrated noise floor,
+//       250 ms PSRAM pre-roll ring buffer, 900 ms silence boundary, 8 s cap,
+//       and 450 ms post-playback half-duplex echo cooldown + DMA flush)
+//     * Push-to-Talk override on GPIO 1 (hold >= 400 ms to talk, quick tap
+//       < 350 ms to toggle Hands-Free VAD ON/OFF at runtime)
+//     * HTTPS POST to Gateway `/talk`, 400 ms PSRAM playback pre-buffer,
+//       1-byte odd-chunk alignment carryover, and stereo [L, L] I2S output.
 // ============================================================================
 
 enum RobotState : uint8_t {
@@ -43,13 +47,27 @@ static constexpr uint32_t   TTS_DEFAULT_RATE   = 24000;
 static constexpr uint32_t   MAX_RECORD_SECONDS = 8; // Gate 12 guardrail: 8-second cap
 static constexpr size_t     MAX_RECORD_SAMPLES = MIC_SAMPLE_RATE * MAX_RECORD_SECONDS; // 128,000 samples (256 KB)
 static constexpr size_t     MIN_VALID_SAMPLES  = (MIC_SAMPLE_RATE * 400) / 1000;       // 400 ms min
-static constexpr size_t     IO_CHUNK_SAMPLES   = 256;
+static constexpr size_t     IO_CHUNK_SAMPLES   = 256;                                  // 16 ms @ 16 kHz
 static constexpr int        MIC_BIT_SHIFT      = 11;
 static constexpr float      PLAYBACK_VOLUME    = 0.35f;
 static constexpr size_t     PREBUFFER_BYTES    = TTS_DEFAULT_RATE * 2 * 400 / 1000;    // 400 ms @ 24 kHz (19.2 KB)
 
-static int16_t* g_recordPsramBuf = nullptr;
-static uint8_t* g_prebufPsram    = nullptr;
+// Hands-Free Half-Duplex VAD Parameters
+static constexpr size_t     VAD_PREROLL_SAMPLES          = (MIC_SAMPLE_RATE * 250) / 1000; // 250 ms pre-roll (4,000 samples)
+static constexpr uint32_t   VAD_ONSET_FRAMES_REQUIRED    = 3;                              // 3 x 16 ms = 48 ms speech onset
+static constexpr uint32_t   VAD_SILENCE_HANGOVER_MS      = 900;                            // Stop 900 ms after speech ends
+static constexpr uint32_t   VAD_POST_PLAYBACK_COOLDOWN_MS = 450;                           // Half-duplex deaf window after TTS
+static constexpr int32_t    VAD_MIN_RMS_THRESHOLD        = 750;
+static constexpr int32_t    VAD_MAX_VALID_AMBIENT_RMS    = 6000;
+
+static int16_t* g_recordPsramBuf  = nullptr;
+static int16_t* g_prerollPsramBuf = nullptr;
+static uint8_t* g_prebufPsram     = nullptr;
+static size_t   g_prerollWriteIdx = 0;
+static bool     g_prerollFull     = false;
+static bool     g_autoVadEnabled  = (ENABLE_AUTO_VAD_DEFAULT != 0);
+static int32_t  g_vadThresholdRms = 1200;
+static uint32_t g_vadOnsetCount   = 0;
 static int32_t  g_prevX = 0;
 static int32_t  g_prevY = 0;
 
@@ -444,29 +462,135 @@ static bool ensureWiFiAndClock() {
     return time(nullptr) > 1700000000;
 }
 
-static size_t captureUtterance() {
-    g_robotState = STATE_LISTENING;
+static int32_t readAndFilterMicChunk(int16_t* outSamples, size_t maxSamples, size_t& outCount) {
     int32_t rawBuf[IO_CHUNK_SAMPLES];
+    size_t bytesRead = 0;
+    outCount = 0;
+    if (i2s_read(MIC_I2S_PORT, rawBuf, sizeof(rawBuf), &bytesRead, pdMS_TO_TICKS(50)) != ESP_OK || bytesRead == 0) {
+        return 0;
+    }
+    size_t count = bytesRead / sizeof(int32_t);
+    if (count > maxSamples) count = maxSamples;
+
+    uint64_t sumSq = 0;
+    for (size_t i = 0; i < count; ++i) {
+        int32_t x = rawBuf[i] >> MIC_BIT_SHIFT;
+        int32_t y = (x - g_prevX) + ((g_prevY * 255) >> 8);
+        g_prevX = x;
+        g_prevY = y;
+        if (y > 32767)  y = 32767;
+        if (y < -32768) y = -32768;
+        int16_t s = static_cast<int16_t>(y);
+        outSamples[i] = s;
+        sumSq += static_cast<uint64_t>(static_cast<int32_t>(s) * s);
+    }
+    outCount = count;
+    return (count > 0) ? static_cast<int32_t>(sqrtf(static_cast<float>(sumSq) / count)) : 0;
+}
+
+static void flushMicAfterPlayback() {
+    // Half-duplex echo protection: wait for speaker acoustic decay, flush DMA RX
+    // buffers, reset IIR DC-blocker state, and clear the VAD pre-roll ring buffer.
+    delay(VAD_POST_PLAYBACK_COOLDOWN_MS);
+    i2s_zero_dma_buffer(MIC_I2S_PORT);
+    g_prevX = 0;
+    g_prevY = 0;
+    g_prerollWriteIdx = 0;
+    g_prerollFull = false;
+    g_vadOnsetCount = 0;
+
+    int16_t dummy[IO_CHUNK_SAMPLES];
+    size_t count = 0;
+    for (int i = 0; i < 4; ++i) {
+        readAndFilterMicChunk(dummy, IO_CHUNK_SAMPLES, count);
+    }
+}
+
+static void calibrateNoiseFloor() {
+    flushMicAfterPlayback();
+    int16_t chunk[IO_CHUNK_SAMPLES];
+    size_t count = 0;
+    uint64_t rmsSum = 0;
+    uint32_t frames = 0;
+
+    // Sample ~480 ms (30 frames x 16 ms) of ambient room sound
+    for (int i = 0; i < 30; ++i) {
+        int32_t rms = readAndFilterMicChunk(chunk, IO_CHUNK_SAMPLES, count);
+        if (count > 0) {
+            rmsSum += static_cast<uint64_t>(rms);
+            frames++;
+        }
+    }
+    int32_t ambientRms = (frames > 0) ? static_cast<int32_t>(rmsSum / frames) : 0;
+    if (ambientRms <= 0 || ambientRms > VAD_MAX_VALID_AMBIENT_RMS) {
+        // Disconnected or floating mic line safety fallback: disable auto-VAD so it never loops
+        g_autoVadEnabled = false;
+        g_vadThresholdRms = 1500;
+        Serial.printf("[VAD] Ambient RMS=%ld out of range (mic disconnected/floating) -> Auto-VAD disabled; use GPIO 1 PTT.\n",
+                      static_cast<long>(ambientRms));
+        return;
+    }
+
+    g_vadThresholdRms = max<int32_t>(VAD_MIN_RMS_THRESHOLD, ambientRms * 3);
+    Serial.printf("[VAD] Calibrated ambient RMS=%ld -> Speech trigger threshold RMS=%ld\n",
+                  static_cast<long>(ambientRms), static_cast<long>(g_vadThresholdRms));
+}
+
+static size_t capturePttUtterance() {
+    g_robotState = STATE_LISTENING;
     size_t recorded = 0;
     g_prevX = 0;
     g_prevY = 0;
     i2s_zero_dma_buffer(MIC_I2S_PORT);
 
     while (digitalRead(PIN_PTT_BTN) == LOW && recorded < MAX_RECORD_SAMPLES) {
-        size_t bytesRead = 0;
-        if (i2s_read(MIC_I2S_PORT, rawBuf, sizeof(rawBuf), &bytesRead, pdMS_TO_TICKS(100)) != ESP_OK) {
-            continue;
+        size_t count = 0;
+        size_t space = MAX_RECORD_SAMPLES - recorded;
+        size_t req = (space < IO_CHUNK_SAMPLES) ? space : IO_CHUNK_SAMPLES;
+        readAndFilterMicChunk(g_recordPsramBuf + recorded, req, count);
+        recorded += count;
+    }
+    return recorded;
+}
+
+static size_t captureVadUtteranceFromPreroll() {
+    g_robotState = STATE_LISTENING;
+    size_t recorded = 0;
+
+    // 1. Prepend the 250 ms circular pre-roll buffer so initial consonant is preserved
+    if (g_prerollFull) {
+        size_t tailLen = VAD_PREROLL_SAMPLES - g_prerollWriteIdx;
+        memcpy(g_recordPsramBuf, g_prerollPsramBuf + g_prerollWriteIdx, tailLen * sizeof(int16_t));
+        memcpy(g_recordPsramBuf + tailLen, g_prerollPsramBuf, g_prerollWriteIdx * sizeof(int16_t));
+        recorded = VAD_PREROLL_SAMPLES;
+    } else if (g_prerollWriteIdx > 0) {
+        memcpy(g_recordPsramBuf, g_prerollPsramBuf, g_prerollWriteIdx * sizeof(int16_t));
+        recorded = g_prerollWriteIdx;
+    }
+    g_prerollWriteIdx = 0;
+    g_prerollFull = false;
+
+    // 2. Record until 900 ms of trailing silence or MAX_RECORD_SAMPLES (8 s)
+    uint32_t lastVoiceMs = millis();
+    uint32_t activeVoiceFrames = VAD_ONSET_FRAMES_REQUIRED;
+    while (recorded < MAX_RECORD_SAMPLES) {
+        size_t count = 0;
+        size_t space = MAX_RECORD_SAMPLES - recorded;
+        size_t req = (space < IO_CHUNK_SAMPLES) ? space : IO_CHUNK_SAMPLES;
+        int32_t rms = readAndFilterMicChunk(g_recordPsramBuf + recorded, req, count);
+        recorded += count;
+
+        if (rms >= g_vadThresholdRms) {
+            lastVoiceMs = millis();
+            activeVoiceFrames++;
+        } else if ((millis() - lastVoiceMs) >= VAD_SILENCE_HANGOVER_MS) {
+            break;
         }
-        size_t count = bytesRead / sizeof(int32_t);
-        for (size_t i = 0; i < count && recorded < MAX_RECORD_SAMPLES; ++i) {
-            int32_t x = rawBuf[i] >> MIC_BIT_SHIFT;
-            int32_t y = (x - g_prevX) + ((g_prevY * 255) >> 8);
-            g_prevX = x;
-            g_prevY = y;
-            if (y > 32767)  y = 32767;
-            if (y < -32768) y = -32768;
-            g_recordPsramBuf[recorded++] = static_cast<int16_t>(y);
-        }
+    }
+
+    // Require at least ~320 ms (20 chunks) of active voice frames above threshold
+    if (activeVoiceFrames < 20) {
+        return 0;
     }
     return recorded;
 }
@@ -537,6 +661,7 @@ static void processTalkTurn(size_t sampleCount) {
     }
 
     http.end();
+    flushMicAfterPlayback();
 }
 
 void setup() {
@@ -548,9 +673,10 @@ void setup() {
 
     pinMode(PIN_PTT_BTN, INPUT_PULLUP);
 
-    g_recordPsramBuf = static_cast<int16_t*>(ps_malloc(MAX_RECORD_SAMPLES * sizeof(int16_t)));
-    g_prebufPsram    = static_cast<uint8_t*>(ps_malloc(PREBUFFER_BYTES));
-    if (!g_recordPsramBuf || !g_prebufPsram) {
+    g_recordPsramBuf  = static_cast<int16_t*>(ps_malloc(MAX_RECORD_SAMPLES * sizeof(int16_t)));
+    g_prerollPsramBuf = static_cast<int16_t*>(ps_malloc(VAD_PREROLL_SAMPLES * sizeof(int16_t)));
+    g_prebufPsram     = static_cast<uint8_t*>(ps_malloc(PREBUFFER_BYTES));
+    if (!g_recordPsramBuf || !g_prerollPsramBuf || !g_prebufPsram) {
         Serial.println("[FAIL] PSRAM allocation failed in robot_main!");
         while (true) { delay(1000); }
     }
@@ -561,25 +687,75 @@ void setup() {
 
     initAudioI2S();
     ensureWiFiAndClock();
-    Serial.println("[READY] Tabletop Robot Online. Hold GPIO 1 button to talk!");
+    if (g_autoVadEnabled) {
+        calibrateNoiseFloor();
+    }
+    Serial.printf("[READY] Tabletop Robot Online (Hands-Free VAD: %s). Speak or hold GPIO 1 (tap GPIO 1 to toggle VAD)!\n",
+                  g_autoVadEnabled ? "ON" : "OFF");
 }
 
 void loop() {
+    // 1. Check GPIO 1 Button: Hold (>= 400 ms) = Push-to-Talk; Quick Tap (< 350 ms) = Toggle Hands-Free VAD
     if (digitalRead(PIN_PTT_BTN) == LOW) {
         delay(30); // 30 ms press debounce
         if (digitalRead(PIN_PTT_BTN) == LOW) {
-            size_t samples = captureUtterance();
+            uint32_t pressStartMs = millis();
+            size_t samples = capturePttUtterance();
+            uint32_t heldMs = millis() - pressStartMs;
             while (digitalRead(PIN_PTT_BTN) == LOW) {
                 delay(10);
             }
             delay(30); // Release debounce
 
-            if (samples >= MIN_VALID_SAMPLES) {
+            if (heldMs < 350 && samples < MIN_VALID_SAMPLES) {
+                g_autoVadEnabled = !g_autoVadEnabled;
+                if (g_autoVadEnabled) {
+                    calibrateNoiseFloor();
+                } else {
+                    flushMicAfterPlayback();
+                }
+                g_robotState = STATE_IDLE;
+                Serial.printf("[MODE] Hands-Free Always-Listening VAD toggled %s\n",
+                              g_autoVadEnabled ? "ON" : "OFF (Push-to-Talk only)");
+            } else if (samples >= MIN_VALID_SAMPLES) {
                 processTalkTurn(samples);
             } else {
+                flushMicAfterPlayback();
                 g_robotState = STATE_IDLE;
             }
+            return;
         }
     }
-    delay(10);
+
+    // 2. Hands-Free Always-Listening Energy VAD with 250 ms Circular Pre-Roll
+    if (g_autoVadEnabled) {
+        int16_t chunk[IO_CHUNK_SAMPLES];
+        size_t count = 0;
+        int32_t rms = readAndFilterMicChunk(chunk, IO_CHUNK_SAMPLES, count);
+        for (size_t i = 0; i < count; ++i) {
+            g_prerollPsramBuf[g_prerollWriteIdx++] = chunk[i];
+            if (g_prerollWriteIdx >= VAD_PREROLL_SAMPLES) {
+                g_prerollWriteIdx = 0;
+                g_prerollFull = true;
+            }
+        }
+
+        if (rms >= g_vadThresholdRms) {
+            g_vadOnsetCount++;
+            if (g_vadOnsetCount >= VAD_ONSET_FRAMES_REQUIRED) {
+                g_vadOnsetCount = 0;
+                size_t vadSamples = captureVadUtteranceFromPreroll();
+                if (vadSamples >= MIN_VALID_SAMPLES) {
+                    processTalkTurn(vadSamples);
+                } else {
+                    flushMicAfterPlayback();
+                    g_robotState = STATE_IDLE;
+                }
+            }
+        } else {
+            g_vadOnsetCount = 0;
+        }
+    } else {
+        delay(10);
+    }
 }
