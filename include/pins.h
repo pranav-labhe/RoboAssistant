@@ -14,12 +14,12 @@
 #define PIN_MIC_SD      6   // SD / DOUT (tie module L/R pin to GND)
 
 // --- 2. MAX98357A Class-D Amplifier (I2S_NUM_1 TX, 5V VIN) ---
-// Hardware wiring note (MAX98357A datasheet gain table):
-//   - Direct jumper GAIN -> VIN (5V): 3 dB (quietest/safest on USB power)
-//   - 100k resistor GAIN -> VIN:      6 dB
-//   - GAIN left floating:             9 dB
-//   - 100k resistor GAIN -> GND:     12 dB
-//   - Direct jumper GAIN -> GND:     15 dB (loudest)
+// Hardware wiring note (Official MAX98357A datasheet gain table):
+//   - 100k resistor GAIN -> VIN:      3 dB (quietest)
+//   - Direct jumper GAIN -> VIN (5V): 6 dB
+//   - GAIN left floating / unconnected: 9 dB (RECOMMENDED DEFAULT: simplest for breadboard)
+//   - Direct jumper GAIN -> GND:     12 dB
+//   - 100k resistor GAIN -> GND:     15 dB (loudest)
 //   - Leave module SD pin floating (firmware sends stereo [L, L] samples)
 #define PIN_AMP_BCLK    15
 #define PIN_AMP_LRC     16

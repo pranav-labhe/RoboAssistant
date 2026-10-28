@@ -9,7 +9,7 @@
 // Build & Upload: pio run -e gate4_speaker -t upload -t monitor
 // Wiring:
 //   BCLK -> GPIO 15, LRC -> GPIO 16, DIN -> GPIO 7, VIN -> 5V, GND -> GND
-//   GAIN -> Direct jumper to VIN (5V) for 3 dB (quietest/safest on USB power)
+//   GAIN -> Leave unconnected / floating for default 9 dB (or direct to VIN for 6 dB)
 //   SD   -> Leave floating (firmware sends identical [Left, Right] samples)
 //   Place 470-1000 uF electrolytic capacitor across 5V and GND rails.
 // Pass Criteria:

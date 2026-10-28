@@ -8,7 +8,7 @@ Order from a seller with a clear return window (e.g., Robu.in, Probots, or verif
 | :--- | :--- | :--- | :--- |
 | **ESP32-S3 Dev Board** | Metal shield laser-etched **`ESP32-S3-WROOM-1-N16R8`** (preferred) or **`N8R8`** (8 MB Octal PSRAM) | 850–1,300 | **Must have `R8` (8 MB Octal PSRAM).** `N16R8` uses `16MB` / `default_16MB.csv`; if you buy `N8R8` (8 MB Flash), you **must** change `platformio.ini` to `8MB` / `default_8MB.csv` or it will bootloop! |
 | **INMP441 I²S Mic** | 6-pin breakout (`SCK, WS, SD, L/R, VDD, GND`) | 240–400 | Ships with **unsoldered headers**. Since you don't own a soldering iron, either **add a ₹220 25W soldering iron + solder wire kit** to your order, or buy pre-soldered/all-in-one hardware. |
-| **MAX98357A Amp** | 7-pin I²S Class-D (`LRC, BCLK, DIN, GAIN, SD, GND, VIN`) | 200–400 | Direct jumper **`GAIN` to `VIN`** gives **3 dB** (quietest, safest for USB power). *Datasheet: `GAIN→VIN` (direct) = 3 dB, `GAIN→VIN` (100kΩ) = 6 dB, floating = 9 dB, `GAIN→GND` (100kΩ) = 12 dB, `GAIN→GND` (direct) = 15 dB.* |
+| **MAX98357A Amp** | 7-pin I²S Class-D (`LRC, BCLK, DIN, GAIN, SD, GND, VIN`) | 200–400 | Leave **`GAIN` unconnected (floating)** for standard **9 dB** default (simplest for breadboards). *Official Datasheet: 100kΩ to `VIN` = 3 dB (quietest), direct to `VIN` = 6 dB, floating = 9 dB (default), direct to `GND` = 12 dB, 100kΩ to `GND` = 15 dB (loudest).* |
 | **Speaker** | **8Ω 2W** (preferred for USB power) or **4Ω 3W**, 28–40 mm | 100–200 | 8Ω draws half the peak current of 4Ω and sounds cleaner at low power. |
 | **ST7789 SPI Display** | 1.3" or 1.54" **240×240 IPS SPI** | 320–500 | **Inspect listing photo for pin labels, not screen size:**<br>• **8-pin (`CS` present)**: Standard `SPI_MODE0`, `pin_cs = 10`.<br>• **7-pin (No `CS` pin)**: Needs `pin_cs = -1` and `spi_mode = 3` in LovyanGFX. |
 | **Passives & Breadboard** | 830-pt breadboard, M-M/M-F jumpers, **1000 µF 16V** electrolytic cap, **0.1 µF** ceramic cap, **1× tactile pushbutton** | ~200 | • **1000 µF electrolytic** across `5V–GND` rail (prevents USB brownout resets).<br>• **0.1 µF ceramic** right across `INMP441` `VDD–GND` (kills Wi-Fi whine).<br>• **Breadboard pushbutton** prevents flexing wires when pressing PTT. |
@@ -47,7 +47,7 @@ Order from a seller with a clear return window (e.g., Robu.in, Probots, or verif
 | **MAX98357A Amp** | `I2S_NUM_1` (TX) | `BCLK` | `GPIO 15` | **5V (VBUS)** | Place `1000 µF` cap across `5V–GND` rail. |
 | | | `LRC` | `GPIO 16` | | |
 | | | `DIN` | `GPIO 7` | | |
-| | | `GAIN` | **`VIN` (5V)** | | Direct wire to `VIN` = **3 dB gain** (lowest/safest for USB; 100kΩ to `VIN` = 6 dB). |
+| | | `GAIN` | Floating (or `VIN`) | | Leave floating for **9 dB default** (or wire direct to `VIN` for 6 dB, 100kΩ to `VIN` for 3 dB). |
 | | | `SD` | Floating | | Send stereo-duplicated `[L, L]` frames in software so any clone works. |
 | **ST7789 Display** | `SPI2_HOST` | `MOSI` (SDA) | `GPIO 11` | **3.3V** | 40 MHz SPI clock. |
 | | | `SCLK` (SCL) | `GPIO 12` | | |
