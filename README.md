@@ -36,7 +36,53 @@ Your `ESP32-S3-WROOM-1-N16R8` has **8 MB of Octal PSRAM**, which allows `robot_m
 
 ---
 
-## 📂 2. Purpose of Every File in This Repository
+## 🛒 2. Hardware Purchase & Compatibility Guide (Exact India Buying Links & Anti-Trap Guide)
+
+> [!CAUTION]
+> ### 🛑 Read This Before Ordering (How to Avoid the Order-Return Trap)
+> This tabletop robot uses **dual-core FreeRTOS + 8 MB Octal PSRAM + two independent I²S hardware buses + SPI DMA**.
+> Many Amazon third-party sellers list generic development boards that appear identical but lack PSRAM, use the wrong bus mode, or are entirely different microcontrollers (such as RP2040).
+> **If you buy the wrong board or analog audio modules, the firmware will immediately crash or bootloop.**
+>
+> 💡 **Where to buy in India**:
+> * **Robu.in** (Recommended for makers, based in Pune, MH): Guarantees exact manufacturer SKUs, verified datasheets, lower prices (saves ~₹500–₹800 across the full kit), and 2–3 day delivery across India.
+> * **Amazon.in**: Convenient with Prime delivery, but verify the seller's title and photo carefully using the checklist below.
+
+### Master Hardware Compatibility & Purchase Table
+
+| Item | Required Specification | Amazon.in Purchase Links | Robu.in Direct Links | Est. Cost (₹) | Compatibility Checklist & "Do NOT Buy" Warnings |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1. ESP32-S3 Dev Board** | **`ESP32-S3-WROOM-1-N16R8`** (Preferred) or **`N8R8`** (16MB Flash, **8MB Octal PSRAM**) | • [Amazon.in ESP32-S3 N16R8](https://www.amazon.in/s?k=ESP32-S3+N16R8)<br>• [Amazon.in ESP32-S3 8MB PSRAM](https://www.amazon.in/s?k=ESP32-S3+development+board+8MB+PSRAM) | • [Robu.in ESP32-S3 DevKit N16R8 Board](https://robu.in/product/esp32-s3-devkitc-1-n16r8-development-board/)<br>• [Robu.in ESP32-S3 N16R8 Search](https://robu.in/?s=ESP32-S3+N16R8&post_type=product) | ₹850 – ₹1,250 | ⚠️ **MUST HAVE `R8` (8 MB Octal PSRAM)**.<br>❌ **DO NOT BUY**: Boards labeled `N4`, `N8R0` (0 PSRAM) or `N16R2` (Quad PSRAM). Our direct cloud mode buffers WAV audio in PSRAM; zero-PSRAM boards will fail PSRAM init and crash.<br>❌ **DO NOT BUY**: RP2040, ESP32 Classic, or ESP32-C3/C6.<br>🔍 **Visual Check**: Metal shield MUST read **`ESP32-S3-WROOM-1-N16R8`** or **`N8R8`**. Always connect USB-C to the port labeled **`USB`** (GPIO 19/20), not `UART`. |
+| **2. I²S Digital Microphone** | **INMP441** Omnidirectional MEMS microphone (6-pin digital I²S breakout) | • [Amazon.in INMP441 Mic Search](https://www.amazon.in/s?k=INMP441+microphone+module)<br>• [Amazon.in INMP441 I2S](https://www.amazon.in/s?k=INMP441+I2S) | • [Robu.in INMP441 I2S Mic Module](https://robu.in/product/inmp441-omnidirectional-microphone-module-i2s-interface/) | ₹180 – ₹320 | ⚠️ **3.3V ONLY**. Connecting to 5V will permanently burn the MEMS sensor.<br>❌ **DO NOT BUY**: Analog mics like `MAX4466`, `MAX9814`, `KY-037`, or `KY-038` (they require ADC sampling and are 100% incompatible with I²S).<br>💡 Solder a `0.1 µF` ceramic capacitor directly between `VDD` and `GND` to eliminate Wi-Fi RF buzzing. |
+| **3. I²S Class-D Audio Amp** | **MAX98357A** Mono I²S DAC + 3W Class-D amplifier breakout (7-pin) | • [Amazon.in MAX98357A Search](https://www.amazon.in/s?k=MAX98357A+I2S+amplifier)<br>• [Amazon.in MAX98357 Module](https://www.amazon.in/s?k=MAX98357) | • [Robu.in MAX98357A I2S 3W Amp](https://robu.in/product/max98357a-i2s-3w-class-d-amplifier-interface-audio-dac-decoder-module/) | ₹200 – ₹380 | ⚠️ Connect `VIN` to **`5V` (`VBUS`)** and wire `GAIN` directly to `VIN` to lock gain to **3 dB** (safest for USB power).<br>❌ **DO NOT BUY**: Analog amps like `PAM8403` or `LM386` (they cannot decode digital I²S streams).<br>💡 Place a `1000 µF 16V` electrolytic capacitor across the breadboard `5V–GND` rail to absorb speaker audio bursts and prevent USB resets. |
+| **4. Miniature Speaker** | **8Ω 2W** (Preferred) or **8Ω 3W** miniature speaker (28–40 mm diameter) | • [Amazon.in 8 Ohm 2W Speaker](https://www.amazon.in/s?k=8+ohm+2W+speaker)<br>• [Amazon.in 8 Ohm 3W Speaker](https://www.amazon.in/s?k=8+ohm+3W+mini+speaker) | • [Robu.in 8 Ohm 2W Internal Speaker](https://robu.in/product/8-ohm-2w-internal-magnet-speaker/)<br>• [Robu.in 8 Ohm Speaker Search](https://robu.in/?s=8+ohm+speaker&post_type=product) | ₹80 – ₹180 | ⚠️ **CRITICAL: CHOOSE 8Ω OVER 4Ω**.<br>An 8Ω speaker draws half the peak current of a 4Ω speaker ($I = V/R$). A 4Ω speaker can draw >1.2 A peak on loud words, tripping your laptop's USB port overcurrent protection and rebooting the robot.<br>❌ **DO NOT BUY**: Piezo buzzers or raw un-housed tweeters. |
+| **5. IPS SPI Color Display** | **ST7789** 1.3" or 1.54" **240×240 IPS TFT** (SPI Interface, 7-pin or 8-pin) | • [Amazon.in ST7789 240x240 Display](https://www.amazon.in/s?k=ST7789+240x240+IPS+SPI)<br>• [Amazon.in 1.3" ST7789 Module](https://www.amazon.in/s?k=1.3+inch+ST7789+display) | • [Robu.in 1.3" IPS 240x240 ST7789](https://robu.in/product/1-3-inch-ips-tft-lcd-display-screen-module-240x240-spi-interface/)<br>• [Robu.in ST7789 240x240 Search](https://robu.in/?s=ST7789+240x240&post_type=product) | ₹320 – ₹520 | ⚠️ Power from **3.3V ONLY**.<br>❌ **DO NOT BUY**: 128×64 OLED (SSD1306/SH1106) or 128×160 TFT (ST7735) displays—the eye graphics engine is designed specifically for 240×240.<br>🔍 **Pinout Check**: Look at the seller image:<br>• **8-Pin Module** (has `CS` pin): set `TFT_HAS_CS_PIN 1` in `include/pins.h`.<br>• **7-Pin Module** (no `CS` pin): set `TFT_HAS_CS_PIN 0` in `include/pins.h`. |
+| **6. Prototyping Essentials** | **830-Point Breadboard** + Dupont Jumper Wires (M-M & M-F) + Tactile Button + Capacitors | • [Amazon.in 830-Pt Breadboard + Jumpers](https://www.amazon.in/s?k=830+point+breadboard+jumper+wires)<br>• [Amazon.in Push Buttons (Pack of 10)](https://www.amazon.in/s?k=tactile+push+button+switch)<br>• [Amazon.in 1000uF 16V Capacitor](https://www.amazon.in/s?k=1000uF+16V+capacitor) | • [Robu.in 830-Point Breadboard](https://robu.in/product/830-points-solderless-breadboard/)<br>• [Robu.in Male-to-Male Jumpers](https://robu.in/product/40-pcs-male-to-male-dupont-cable-20cm/)<br>• [Robu.in Male-to-Female Jumpers](https://robu.in/product/40-pcs-male-to-female-dupont-cable-20cm/) | ₹200 – ₹350 | ⚠️ **Do NOT buy small 400-point breadboards**—the ESP32-S3 DevKit is wide and needs an 830-point board to fit the modules alongside it.<br>⚠️ Electrolytic capacitor polarity: Stripe with `-` signs connects to `GND`, longer leg connects to `5V`. |
+| **7. Basic Soldering Kit** | **25W–60W Soldering Iron** + 60/40 rosin-core solder wire + flux paste | • [Amazon.in 25W Soldering Iron Kit](https://www.amazon.in/s?k=soldering+iron+kit+25W)<br>• [Amazon.in 60W Adjustable Soldering Kit](https://www.amazon.in/s?k=60W+soldering+iron+kit) | • [Robu.in 25W Soldering Iron Kit](https://robu.in/?s=soldering+iron+kit&post_type=product) | ₹200 – ₹380 | ⚠️ **MANDATORY**: `INMP441` and `MAX98357A` ship with loose header pins in the bag. Pushing un-soldered pins into a breadboard produces loose physical contacts, resulting in severe I²S clock static, reboot loops, and silent failure.<br>💡 *Zero-iron option*: Any neighborhood mobile or electronics repair shop will solder all 3 headers for you in 3 minutes for ₹50–₹100. |
+
+---
+
+### 💰 Total Kit Cost Breakdown
+
+| Configuration | What's Included | Estimated Total (₹) |
+| :--- | :--- | :--- |
+| **Minimalist Core Kit** (All from Robu.in) | ESP32-S3 N16R8 + INMP441 + MAX98357A + 8Ω Speaker + ST7789 Display + Breadboard & Jumpers + Capacitors | **~₹1,850 – ₹2,200** |
+| **Prime Express Kit** (All from Amazon.in) | Core components with Amazon Prime 1-2 day delivery | **~₹2,400 – ₹2,900** |
+| **Full Starter Kit (with Soldering Kit)** | Core components + 25W–60W soldering kit + stand + solder wire | **~₹2,250 – ₹2,800** (Robu) / **~₹2,700 – ₹3,300** (Amazon) |
+
+---
+
+### 📋 4-Step Pre-Flight Checklist (When Your Packages Arrive)
+
+Before plugging anything into USB or power, verify these 4 items:
+1. **Verify the ESP32-S3 Metal Can**: Look closely at the laser engraving on the metal shield. It **must** read `ESP32-S3-WROOM-1-N16R8` or `N8R8`. If it reads `N4` (0 PSRAM) or `ESP32-WROOM-32` (old ESP32), initiate an immediate return.
+2. **Solder the Header Pins**: Solder the 6-pin header on the `INMP441` and the 7-pin header on the `MAX98357A`. Solder joints should look like clean, shiny little cones.
+3. **Power Rails Grounding**: Double check that `INMP441` and `ST7789` are plugged into the **3.3V** rail, and `MAX98357A` is plugged into the **5V (`VBUS`)** rail with the `1000 µF` capacitor installed across `5V` and `GND`.
+4. **USB Port Selection**: When connecting to your PC/laptop, plug into the USB-C port labeled **`USB`** (native USB CDC on GPIO 19/20). The port labeled `UART` will not display the runtime serial logs.
+
+---
+
+## 📂 3. Purpose of Every File in This Repository
 
 ```text
 RoboAssistant/
@@ -107,7 +153,7 @@ RoboAssistant/
 
 ---
 
-## 🛠️ 3. Complete Step-by-Step "How-To" Guide
+## 🛠️ 4. Complete Step-by-Step "How-To" Guide
 
 ### Step 1 — Create Your Outside-Repo Secrets (`~/.robo_secrets/`)
 
