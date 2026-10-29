@@ -61,31 +61,33 @@ Your `ESP32-S3-WROOM-1-N16R8` has **8 MB of Octal PSRAM**, which allows `robot_m
 
 ### 💰 Total Kit Cost Estimate (DIY Soldered Option)
 
-| Item | Selected Product | Cost (₹) |
-| :--- | :--- | :---: |
-| **ESP32-S3 N16R8 Board** | [VIREXON ESP32-S3 N16R8 (16MB Flash, 8MB PSRAM)](https://www.amazon.in/dp/B0H94PHFSW) | ₹945 |
-| **Audio Modules Combo** | [MAX98357A I²S Amp + INMP441 Mic Audio Combo](https://www.amazon.in/dp/B0H3M78HQV) *(or separately ₹199 + ₹249)* | ₹407 |
-| **8Ω 3W Speaker** | [Mini 2-Inch 8 Ohm 3W Speaker Driver](https://www.amazon.in/dp/B0HNGZX1KV) | ₹290 |
-| **ST7789 IPS Display** | [1.3-inch 240×240 RGB TFT IPS LCD Module (7-Pin ST7789)](https://www.amazon.in/dp/B0CTQXNQWY) | ₹580 |
-| **830-Pt Breadboard Kit** | [OSFT 830 Point Breadboard + 30-pc Jumper Wires](https://www.amazon.in/dp/B0FRGB33KB) | ₹249 |
-| **Passives Filtering Pack**| [Robodo 1000uF 25V Electrolytic Capacitors (Pack of 10)](https://www.amazon.in/dp/B09VL23ZP1) + Buttons/Caps | ₹149 |
-| **Soldering Iron Kit** | [Aptechdeals Soldering Kit Beginner 6-in-1](https://www.amazon.in/dp/B07D1PQ7TM) | ₹242 |
-| **TOTAL** | **Estimated Hardware Component Cost (DIY Solder Path)** | **~₹2,862 INR** |
+| Item | Selected Product | Cost (₹) | Order Status |
+| :--- | :--- | :---: | :---: |
+| **ESP32-S3 N16R8 Board** | [VIREXON ESP32-S3 N16R8 (16MB Flash, 8MB PSRAM)](https://www.amazon.in/dp/B0H94PHFSW) | ₹945 | ✅ **Ordered** *(Arriving Sunday)* |
+| **Audio Modules Combo** | [MAX98357A I²S Amp + INMP441 Mic Audio Combo](https://www.amazon.in/dp/B0H3M78HQV) *(or separately ₹199 + ₹249)* | ₹407 | 🛒 In Shopping List |
+| **8Ω 3W Speaker** | [Mini 2-Inch 8 Ohm 3W Speaker Driver](https://www.amazon.in/dp/B0HNGZX1KV) | ₹290 | 🛒 In Shopping List |
+| **ST7789 IPS Display** | [1.3-inch 240×240 RGB TFT IPS LCD Module (7-Pin ST7789)](https://www.amazon.in/dp/B0CTQXNQWY) | ₹580 | 🛒 In Shopping List |
+| **830-Pt Breadboard Kit** | [OSFT 830 Point Breadboard + 30-pc Jumper Wires](https://www.amazon.in/dp/B0FRGB33KB) | ₹249 | 🛒 In Shopping List |
+| **Passives Filtering Pack**| [Robodo 1000uF 25V Electrolytic Capacitors (Pack of 10)](https://www.amazon.in/dp/B09VL23ZP1) + Buttons/Caps | ₹149 | 🛒 In Shopping List |
+| **Soldering Iron Kit** | [Aptechdeals Soldering Kit Beginner 6-in-1](https://www.amazon.in/dp/B07D1PQ7TM) | ₹242 | ✅ **Delivered Today** |
+| **TOTAL** | **Estimated Hardware Component Cost (DIY Solder Path)** | **~₹2,862 INR** | **2 of 7 Ordered** |
+
+> ℹ️ *Diagnostic Tool: Digital Multimeter is also ✅ **Ordered** (Arriving Tomorrow).*
 
 ---
 
 ### 💰 Total Kit Cost Estimate (Pre-Soldered / Zero-Iron Option)
 
-| Item | Selected Product / Solderless Alternative | Cost (₹) |
-| :--- | :--- | :---: |
-| **ESP32-S3 N16R8 Board** | [VIREXON ESP32-S3 N16R8](https://www.amazon.in/dp/B0H94PHFSW) *(All 44 pins factory pre-soldered)* | ₹945 |
-| **Audio Modules Combo** | [MAX98357A + INMP441 Combo](https://www.amazon.in/dp/B0H3M78HQV) *(Pre-soldered or ₹40 local technician fee)* | ₹407 – ₹447 |
-| **8Ω 3W Speaker** | [Mini 2-Inch 8 Ohm 3W Speaker Driver](https://www.amazon.in/dp/B0HNGZX1KV) *(Pre-wired leads)* | ₹290 |
-| **ST7789 IPS Display** | [1.3-inch 240×240 RGB TFT IPS (7-Pin ST7789)](https://www.amazon.in/dp/B0CTQXNQWY) *(Factory pre-soldered)* | ₹580 |
-| **830-Pt Breadboard Kit** | [OSFT 830 Point Breadboard + Jumper Wires](https://www.amazon.in/dp/B0FRGB33KB) *(100% plug-and-play)* | ₹249 |
-| **Passives Filtering Pack**| [Robodo 1000uF 25V Capacitors](https://www.amazon.in/dp/B09VL23ZP1) + Buttons/Caps *(Push-in)* | ₹149 |
-| **Soldering Iron Kit** | **NONE NEEDED** *(Omitted / Returned for full refund)* | **₹0** |
-| **TOTAL** | **Estimated Hardware Component Cost (100% Solderless Path)** | **~₹2,660 INR** |
+| Item | Selected Product / Solderless Alternative | Cost (₹) | Order Status |
+| :--- | :--- | :---: | :---: |
+| **ESP32-S3 N16R8 Board** | [VIREXON ESP32-S3 N16R8](https://www.amazon.in/dp/B0H94PHFSW) *(All 44 pins factory pre-soldered)* | ₹945 | ✅ **Ordered** *(Arriving Sunday)* |
+| **Audio Modules Combo** | [MAX98357A + INMP441 Combo](https://www.amazon.in/dp/B0H3M78HQV) *(Pre-soldered or ₹40 local technician fee)* | ₹407 – ₹447 | 🛒 In Shopping List |
+| **8Ω 3W Speaker** | [Mini 2-Inch 8 Ohm 3W Speaker Driver](https://www.amazon.in/dp/B0HNGZX1KV) *(Pre-wired leads)* | ₹290 | 🛒 In Shopping List |
+| **ST7789 IPS Display** | [1.3-inch 240×240 RGB TFT IPS (7-Pin ST7789)](https://www.amazon.in/dp/B0CTQXNQWY) *(Factory pre-soldered)* | ₹580 | 🛒 In Shopping List |
+| **830-Pt Breadboard Kit** | [OSFT 830 Point Breadboard + Jumper Wires](https://www.amazon.in/dp/B0FRGB33KB) *(100% plug-and-play)* | ₹249 | 🛒 In Shopping List |
+| **Passives Filtering Pack**| [Robodo 1000uF 25V Capacitors](https://www.amazon.in/dp/B09VL23ZP1) + Buttons/Caps *(Push-in)* | ₹149 | 🛒 In Shopping List |
+| **Soldering Iron Kit** | **NONE NEEDED** *(Can return delivered kit for ₹242 refund)* | **₹0** | 🔄 Returnable (₹0) |
+| **TOTAL** | **Estimated Hardware Component Cost (100% Solderless Path)** | **~₹2,660 INR** | **1 of 6 Ordered** |
 
 ---
 
