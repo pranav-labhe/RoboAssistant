@@ -135,17 +135,42 @@ If this is your first time setting up breadboard hardware, do not worry at all. 
 
 ---
 
-#### Step 1: Place the ESP32-S3 on the Breadboard & Run Gate 1
+#### Step 1: Understand the White Board (Breadboard), Wire Connectors & Run Gate 1
 <p align="center">
-  <img src="docs/images/esp32s3_n16r8.jpg" width="140" alt="ESP32-S3 N16R8">
+  <img src="docs/images/breadboard_anatomy_tutorial.jpg" width="100%" alt="How the Solderless Breadboard and Wire Connectors Work">
 </p>
 
-* **What is this?** This is your main robot brain. It contains the dual-core processor, Wi-Fi radio, 16 MB Flash memory, and 8 MB Octal PSRAM.
+##### 💡 First: What is that White Plastic Board? (The Solderless Breadboard)
+If you are holding this white board for the first time, think of it as a reusable, plug-and-play socket board. You do **not** need to solder any wires! Here is how it works inside:
+1. **Hidden Metal Spring Clips**: Underneath every row of 5 holes (labeled `a, b, c, d, e`), there is a hidden metal spring clip strip.
+   * *The Golden Rule*: All 5 holes in the same numbered horizontal row are connected together inside!
+   * *Example*: If you plug an ESP32 pin into hole `15c`, and push a jumper wire into hole `15b` (or `15a`, `15d`, `15e`), they are now electrically connected together by the hidden clip underneath!
+2. **The Center Divider Trench**: The ditch/groove running down the exact center divides the left half from the right half. Holes on the left side of the trench do **not** touch holes on the right side.
+   * *Crucial Rule*: You **must** mount your ESP32-S3 board straddling this center ditch, so its left pins and right pins stay completely independent!
+3. **Power Rails (The Side Columns)**: The long columns on the outer edges marked with red (`+`) and blue/black (`-`) stripes are connected vertically all the way down. This is where you bring `3.3V`, `5V`, and `GND` so any component can easily plug in for power.
+
+---
+
+##### 🔌 Second: How Do Wires & Pins Connect? (Soldering vs. Plug-and-Play)
+1. **The Colorful Dupont Jumper Wires**:
+   * These wires have a stiff, pointed metal pin on both ends (Male-to-Male).
+   * **Zero Soldering for Wires**: You never solder wires! You just push the pointed pin straight into a breadboard hole with your fingers. The hidden spring clip grabs it tightly. To remove or change it, just pull it out.
+2. **The Header Pins (Metal Legs on Modules)**:
+   * **ESP32-S3 & ST7789 Display**: Arrive with their metal pins already factory-welded (pre-soldered). You simply push the board straight down into the breadboard holes like plugging a charger into a wall socket.
+   * **INMP441 Mic & MAX98357A Amp**: Usually ship with a loose strip of metal pins in the plastic pouch.
+     * *Easiest Zero-Iron Option*: Take the two small modules and the loose pin strips to any local mobile phone or electronics repair shop. The technician will solder the pins for ₹30–₹40 in 2 minutes.
+     * *DIY Iron Option*: If soldering yourself, place the long legs of the pins into the breadboard, sit the module on top so the short pins poke through the gold ring pads, touch the iron tip to the pad for 2 seconds, and feed a tiny touch of solder wire until a clean, shiny cone forms.
+3. **The Speaker Wires**:
+   * The 8Ω speaker has two bare wires (Red `+` and Black `-`). On the MAX98357A amplifier board, there is a small terminal block with two screws.
+   * Simply loosen the screws with a mini screwdriver, slide the bare wire tips into the holes, and tighten the screws. Zero soldering needed!
+
+---
+
+##### 🚀 Now Place the Board & Run Gate 1
 * **What to do?**
-  1. Take your white breadboard. You will notice a groove (trench) running down the exact center.
-  2. Place the ESP32-S3 board so it straddles this center groove. The left pins go into the left row holes, and the right pins go into the right row holes. Press gently and evenly until it sits firmly.
-  3. Do not connect any other wires yet!
-  4. Connect your USB-C cable from your laptop into the port labeled **`USB`**.
+  1. Place the ESP32-S3 board so it straddles the center divider groove on the breadboard. The left row of pins goes into the left holes, and the right row goes into the right holes. Press gently and evenly until it sits firmly.
+  2. Do not connect any other wires yet!
+  3. Connect your USB-C cable from your laptop into the port labeled **`USB`** (not UART!).
 * **How to test?** Open your terminal in `c:\Robo` and run:
   ```powershell
   python -m platformio run -e gate1_board -t upload -t monitor
@@ -155,16 +180,18 @@ If this is your first time setting up breadboard hardware, do not worry at all. 
 ---
 
 #### Step 2: Wire the ST7789 Color Display & Run Gate 2
-<p align="center">
-  <img src="docs/images/st7789_display.jpg" width="140" alt="ST7789 IPS Display">
-</p>
+<div align="center">
+  <img src="docs/images/st7789_front_back.jpg" width="49%" alt="ST7789 Front Display and Back PCB Pin Labels">
+  <img src="docs/images/step2_tutorial_photo.jpg" width="49%" alt="ST7789 Breadboard Wiring to ESP32-S3">
+</div>
 
 * **What is this?** This is your robot's face. It is a 1.3-inch high-clarity IPS screen that renders animated eye expressions at 30+ FPS.
+* **Finding the Pin Labels**: Turn the screen module over and look at the **Back PCB Face** (as shown in the left photo above). You will see the silk-screen labels printed in white next to the 7 pins: `GND`, `VCC`, `SCL`, `SDA`, `RES`, `DC`, `BLK`.
 * **What to do?**
-  1. Insert the 7-pin display module into the breadboard, or use female-to-male jumper wires.
-  2. Connect the wires carefully to the ESP32-S3 pins:
+  1. Insert the 7-pin display module into the breadboard, or use jumper wires.
+  2. Connect the wires carefully to the ESP32-S3 pins (as shown in the right photo above):
      * `GND` -> ESP32 `GND`
-     * `VCC` -> ESP32 **`3.3V`** *(Do not connect to 5V!)*
+     * `VCC` -> ESP32 **`3.3V`** *(Strictly 3.3V! Do not connect to 5V!)*
      * `SCL` -> `GPIO 12` (SPI Clock)
      * `SDA` -> `GPIO 11` (SPI Data / MOSI)
      * `RES` (Reset) -> `GPIO 14`
@@ -181,13 +208,13 @@ If this is your first time setting up breadboard hardware, do not worry at all. 
 
 #### Step 3: Wire the INMP441 Microphone & Run Gate 3
 <p align="center">
-  <img src="docs/images/inmp441_mic.jpg" width="140" alt="INMP441 I2S Mic">
+  <img src="docs/images/step3_mic_tutorial.jpg" width="100%" alt="INMP441 Microphone Breadboard Wiring to ESP32-S3">
 </p>
 
 * **What is this?** This is your robot's ear. It is an omnidirectional digital microphone that streams 16,000 audio samples every second directly into the chip.
-* **Visual Identification**: Look at the underside of the small black board—you will see a tiny golden circular hole. That is the acoustic port where sound enters. Keep this face exposed to the air.
+* **Visual Identification**: Look at the underside of the small black board—you will see a tiny golden circular hole (shown with the arrow in the photo above). That is the acoustic sound port where sound enters. Keep this face exposed to the air.
 * **What to do?**
-  1. Connect the 6 pins using jumper wires:
+  1. Insert the microphone into the breadboard and connect the 6 pins using jumper wires:
      * `VDD` -> ESP32 **`3.3V`** *(Strictly 3.3V! 5V will permanently burn this chip!)*
      * `GND` -> ESP32 `GND`
      * `L/R` -> ESP32 `GND` *(Connecting L/R to GND selects Left audio channel)*
@@ -205,15 +232,13 @@ If this is your first time setting up breadboard hardware, do not worry at all. 
 ---
 
 #### Step 4: Wire the MAX98357A Amplifier, 8Ω Speaker & Run Gate 4
-<div align="center">
-  <img src="docs/images/max98357a_amp.jpg" width="130" alt="MAX98357A Amp">
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/images/speaker_8ohm.jpg" width="130" alt="8 Ohm 3W Speaker">
-</div>
+<p align="center">
+  <img src="docs/images/step4_speaker_tutorial.jpg" width="100%" alt="MAX98357A Amplifier & Speaker Breadboard Wiring to ESP32-S3">
+</p>
 
 * **What is this?** This is your robot's mouth. The purple board is a 3-Watt Class-D digital amplifier, and the circular metal unit is the 8 Ohm speaker.
 * **What to do?**
-  1. Connect the two speaker wires to the screw terminal blocks on the amplifier (Red to `+`, Black to `-`). Tighten the small screws gently with a screwdriver.
+  1. Connect the two speaker wires to the green screw terminal blocks on the amplifier (Red to `+`, Black to `-`). Tighten the small screws gently with a mini screwdriver.
   2. Connect the amplifier's pins to the ESP32-S3:
      * `VIN` -> ESP32 **`5V` (`VBUS`)**
      * `GND` -> ESP32 `GND`
@@ -235,12 +260,12 @@ If this is your first time setting up breadboard hardware, do not worry at all. 
 
 #### Step 5: Wire the Push-to-Talk Button & Test Voice Loopback (Gate 5)
 <p align="center">
-  <img src="docs/images/breadboard_ptt.jpg" width="140" alt="Breadboard & Pushbutton">
+  <img src="docs/images/step5_ptt_tutorial.jpg" width="100%" alt="Tactile Push-to-Talk Button Breadboard Wiring to ESP32-S3">
 </p>
 
 * **What is this?** This is your offline voice verification gate and manual push-to-talk button.
 * **What to do?**
-  1. Insert a 4-pin tactile pushbutton into the breadboard across the center divider.
+  1. Insert the 4-pin tactile pushbutton into the breadboard across the center divider trench.
   2. Connect one side (Pin A) to `GPIO 1` on the ESP32-S3.
   3. Connect the diagonal side (Pin B) to `GND`.
   4. Plug the USB cable back in.
