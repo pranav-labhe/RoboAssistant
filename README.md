@@ -152,6 +152,10 @@ If you are holding this white board for the first time, think of it as a reusabl
 ---
 
 ##### 🔌 Second: How Do Wires & Pins Connect? (Soldering vs. Plug-and-Play)
+<p align="center">
+  <img src="docs/images/wire_connectors_tutorial.jpg" width="100%" alt="3 Types of Wire Connections: Dupont Jumper Wires, Header Pins, and Speaker Screw Terminals">
+</p>
+
 1. **The Colorful Dupont Jumper Wires**:
    * These wires have a stiff, pointed metal pin on both ends (Male-to-Male).
    * **Zero Soldering for Wires**: You never solder wires! You just push the pointed pin straight into a breadboard hole with your fingers. The hidden spring clip grabs it tightly. To remove or change it, just pull it out.
@@ -167,6 +171,10 @@ If you are holding this white board for the first time, think of it as a reusabl
 ---
 
 ##### 🚀 Now Place the Board & Run Gate 1
+<p align="center">
+  <img src="docs/images/step1_board_gate1_tutorial.jpg" width="100%" alt="Mount ESP32-S3 Straddling Center Divider & Plug into USB Port">
+</p>
+
 * **What to do?**
   1. Place the ESP32-S3 board so it straddles the center divider groove on the breadboard. The left row of pins goes into the left holes, and the right row goes into the right holes. Press gently and evenly until it sits firmly.
   2. Do not connect any other wires yet!
