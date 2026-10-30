@@ -1,5 +1,9 @@
 # 🤖 RoboAssistant — ESP32-S3 Tabletop Voice Robot & Provider-Agnostic Voice Gateway
 
+<p align="center">
+  <img src="docs/images/robot_hero.jpg" width="100%" alt="RoboAssistant ESP32-S3 Tabletop Voice Robot">
+</p>
+
 A compact tabletop voice robot (~20–30 cm, inspired by OttoRobot + XiaoZhi AI) powered by an **`ESP32-S3-WROOM-1-N16R8`** (16 MB Flash, 8 MB Octal PSRAM) and a thin, provider-agnostic Python FastAPI **Voice Gateway** (`STT → LLM → TTS`).
 
 ---
@@ -91,6 +95,21 @@ Your `ESP32-S3-WROOM-1-N16R8` has **8 MB of Octal PSRAM**, which allows `robot_m
 
 ---
 
+### 📸 Hardware-to-Code Visual Linkage Map
+
+This visual reference maps each physical component arriving in your delivery directly to its software driver configuration in [`include/pins.h`](include/pins.h), its isolated verification gate test in [`src/`](src/), and its role in the final production system:
+
+| Physical Component & Visual Identification | Power Rail & Spec | Hardware Pins (`include/pins.h`) | Verification Gate Firmware | Production Robot Role (`robot_main`) |
+| :---: | :--- | :--- | :--- | :--- |
+| <img src="docs/images/esp32s3_n16r8.jpg" width="110" alt="ESP32-S3 N16R8"><br>**ESP32-S3 N16R8**<br>*(Metal shield reads N16R8, Dual Type-C)* | **5V via USB-C**<br>• 16MB Flash<br>• 8MB Octal PSRAM<br>• Dual Xtensa LX7 | • Native USB CDC: `GPIO 19/20`<br>• Octal PSRAM Bus: `GPIO 26–37` (internal)<br>• Boot strap: `GPIO 0` | [`src/gate1_board/main.cpp`](src/gate1_board/main.cpp)<br>`pio run -e gate1_board -t upload -t monitor` | Core 0 runs 30 FPS display engine; Core 1 runs VAD, PTT, audio capture & direct TLS cloud streaming. |
+| <img src="docs/images/st7789_display.jpg" width="110" alt="ST7789 Display"><br>**ST7789 IPS Display**<br>*(1.3" 240×240 IPS, 7-pin pre-soldered)* | **3.3V ONLY**<br>• 40 MHz SPI<br>• IPS full viewing angle | • `MOSI` (SDA) -> `GPIO 11`<br>• `SCLK` (SCL) -> `GPIO 12`<br>• `DC` -> `GPIO 9`<br>• `RST` -> `GPIO 14`<br>• `BL` -> `GPIO 13`<br>• `CS` -> `-1` (`TFT_HAS_CS_PIN 0`) | [`src/gate2_display/main.cpp`](src/gate2_display/main.cpp)<br>`pio run -e gate2_display -t upload -t monitor` | Renders dynamic cyan animated eyes and expressions (`BOOT`, `IDLE`, `LISTENING`, `THINKING`, `SPEAKING`, `ERROR`) from PSRAM canvas. |
+| <img src="docs/images/inmp441_mic.jpg" width="110" alt="INMP441 Mic"><br>**INMP441 I²S Mic**<br>*(Tiny gold acoustic hole on bottom face)* | **3.3V ONLY**<br>*(5V will destroy it!)*<br>• 16 kHz 32-bit I²S<br>• Place 0.1µF cap across VDD-GND | • `SCK` (BCLK) -> `GPIO 4`<br>• `WS` (LRCLK) -> `GPIO 5`<br>• `SD` (DOUT) -> `GPIO 6`<br>• `L/R` -> `GND` (Left channel) | [`src/gate3_mic/main.cpp`](src/gate3_mic/main.cpp)<br>`pio run -e gate3_mic -t upload -t monitor` | Always-on microphone stream with fixed-point DC-bias filter, RMS energy speech detector (Hands-free VAD), and audio capture buffer. |
+| <img src="docs/images/max98357a_amp.jpg" width="110" alt="MAX98357A Amp"><br>**MAX98357A I²S Amp**<br>*(Purple board with chip & terminal blocks)* | **5V (VBUS)**<br>• 3W Class-D mono DAC<br>• Place 1000µF cap across 5V-GND rail | • `BCLK` -> `GPIO 15`<br>• `LRC` -> `GPIO 16`<br>• `DIN` -> `GPIO 7`<br>• `GAIN` -> Floating (9 dB default)<br>• `SD` -> Floating / Pull-up | [`src/gate4_speaker/main.cpp`](src/gate4_speaker/main.cpp)<br>`pio run -e gate4_speaker -t upload -t monitor` | High-fidelity 24 kHz audio playback engine with software stereo-cloned `[L, L]` frames and click-free attack/release ramp curves. |
+| <img src="docs/images/speaker_8ohm.jpg" width="110" alt="8 Ohm Speaker"><br>**8Ω 3W Speaker**<br>*(2-inch driver with pre-wired red/black leads)* | **Driven by Amp**<br>• 8 Ohm impedance<br>• Low peak draw avoids USB brownout | • `+` (Red lead) -> Amp `+`<br>• `-` (Black lead) -> Amp `-`<br>*(Polarity is reversible for mono voice)* | [`src/gate4_speaker/main.cpp`](src/gate4_speaker/main.cpp)<br>`pio run -e gate4_speaker -t upload -t monitor` | Voice output for AI speech synthesis playback and local audio loopback playback. |
+| <img src="docs/images/breadboard_ptt.jpg" width="110" alt="Breadboard & PTT"><br>**Breadboard & PTT**<br>*(830 points + 6x6mm button + 1000µF cap)* | **Passive / Power Rails**<br>• Split power distribution<br>• Active-LOW pushbutton | • Pushbutton Pin A -> `GPIO 1`<br>• Pushbutton Pin B -> `GND`<br>• 1000µF Cap: `+` to `5V`, `-` stripe to `GND` | [`src/gate5_loopback/main.cpp`](src/gate5_loopback/main.cpp)<br>`pio run -e gate5_loopback -t upload -t monitor` | `GPIO 1` Push-to-Talk hardware override (interrupt-driven with 30ms debounce); 1000µF capacitor prevents Wi-Fi RF brownout resets. |
+
+---
+
 ### 📋 4-Step Pre-Flight Checklist (When Your Packages Arrive)
 
 Before plugging anything into USB or power, verify these 4 items:
@@ -100,6 +119,148 @@ Before plugging anything into USB or power, verify these 4 items:
 2. **Solder the Header Pins**: Solder the 6-pin header on the `INMP441` and the 7-pin header on the `MAX98357A`. Solder joints should look like clean, shiny little cones.
 3. **Power Rails Grounding**: Double check that `INMP441` and `ST7789` are plugged into the **3.3V** rail, and `MAX98357A` is plugged into the **5V (`VBUS`)** rail with the `1000 µF` capacitor installed across `5V` and `GND`.
 4. **USB Port Selection**: When connecting to your PC/laptop, plug into the USB-C port labeled **`USB`** (native USB CDC on GPIO 19/20). The port labeled `UART` will not display the runtime serial logs.
+
+---
+
+### 🔌 Practical Assembly & Testing Walkthrough: What to Do & How to Do It
+
+If this is your first time setting up breadboard hardware, do not worry at all. Think of this hardware setup like setting up a clean microservice architecture: each physical module is an independent service with its own power requirements and data bus, and we test them one by one.
+
+#### ⚠️ Three Golden Rules Before You Start Wiring
+1. **Never Wire While Plugged In**: Always unplug the USB-C cable from your laptop before moving any jumper wires or plugging in any component.
+2. **Respect the Power Rails (3.3V vs 5V)**:
+   * **3.3V** is for delicate modules (`INMP441` mic and `ST7789` display). If you accidentally give them 5V, they will burn out permanently.
+   * **5V (`VBUS`)** is only for the `MAX98357A` speaker amplifier.
+3. **Use the Correct USB Port**: Your ESP32-S3 board has two Type-C ports. Always connect your cable to the port clearly labeled **`USB`** (native CDC on GPIO 19/20). The port labeled `UART` will not show live runtime logs.
+
+---
+
+#### Step 1: Place the ESP32-S3 on the Breadboard & Run Gate 1
+<p align="center">
+  <img src="docs/images/esp32s3_n16r8.jpg" width="140" alt="ESP32-S3 N16R8">
+</p>
+
+* **What is this?** This is your main robot brain. It contains the dual-core processor, Wi-Fi radio, 16 MB Flash memory, and 8 MB Octal PSRAM.
+* **What to do?**
+  1. Take your white breadboard. You will notice a groove (trench) running down the exact center.
+  2. Place the ESP32-S3 board so it straddles this center groove. The left pins go into the left row holes, and the right pins go into the right row holes. Press gently and evenly until it sits firmly.
+  3. Do not connect any other wires yet!
+  4. Connect your USB-C cable from your laptop into the port labeled **`USB`**.
+* **How to test?** Open your terminal in `c:\Robo` and run:
+  ```powershell
+  python -m platformio run -e gate1_board -t upload -t monitor
+  ```
+* **Expected Output**: The terminal will print the chip model, confirm 16 MB Flash, and run a 1 MB read/write test across the 8 MB Octal PSRAM. You should see `[GATE 1 PASSED: PSRAM OK]`. Unplug the USB cable once verified.
+
+---
+
+#### Step 2: Wire the ST7789 Color Display & Run Gate 2
+<p align="center">
+  <img src="docs/images/st7789_display.jpg" width="140" alt="ST7789 IPS Display">
+</p>
+
+* **What is this?** This is your robot's face. It is a 1.3-inch high-clarity IPS screen that renders animated eye expressions at 30+ FPS.
+* **What to do?**
+  1. Insert the 7-pin display module into the breadboard, or use female-to-male jumper wires.
+  2. Connect the wires carefully to the ESP32-S3 pins:
+     * `GND` -> ESP32 `GND`
+     * `VCC` -> ESP32 **`3.3V`** *(Do not connect to 5V!)*
+     * `SCL` -> `GPIO 12` (SPI Clock)
+     * `SDA` -> `GPIO 11` (SPI Data / MOSI)
+     * `RES` (Reset) -> `GPIO 14`
+     * `DC` (Data/Command) -> `GPIO 9`
+     * `BLK` (Backlight) -> `GPIO 13`
+  3. Plug the USB cable back into the laptop.
+* **How to test?** Run:
+  ```powershell
+  python -m platformio run -e gate2_display -t upload -t monitor
+  ```
+* **Expected Output**: The screen will light up immediately with vivid cyan robot eyes that blink smoothly at ~33 FPS. Unplug the USB cable once verified.
+
+---
+
+#### Step 3: Wire the INMP441 Microphone & Run Gate 3
+<p align="center">
+  <img src="docs/images/inmp441_mic.jpg" width="140" alt="INMP441 I2S Mic">
+</p>
+
+* **What is this?** This is your robot's ear. It is an omnidirectional digital microphone that streams 16,000 audio samples every second directly into the chip.
+* **Visual Identification**: Look at the underside of the small black board—you will see a tiny golden circular hole. That is the acoustic port where sound enters. Keep this face exposed to the air.
+* **What to do?**
+  1. Connect the 6 pins using jumper wires:
+     * `VDD` -> ESP32 **`3.3V`** *(Strictly 3.3V! 5V will permanently burn this chip!)*
+     * `GND` -> ESP32 `GND`
+     * `L/R` -> ESP32 `GND` *(Connecting L/R to GND selects Left audio channel)*
+     * `SCK` -> `GPIO 4`
+     * `WS`  -> `GPIO 5`
+     * `SD`  -> `GPIO 6`
+  2. *(Noise Filter)* Push a small `0.1 µF` ceramic capacitor across the breadboard rows for `VDD` and `GND` near the mic to filter out Wi-Fi hum.
+  3. Plug the USB cable back in.
+* **How to test?** Run:
+  ```powershell
+  python -m platformio run -e gate3_mic -t upload -t monitor
+  ```
+* **Expected Output**: The terminal will print live audio RMS values. When you speak or snap your fingers near the mic, the RMS level numbers will jump visibly. Unplug the USB cable once verified.
+
+---
+
+#### Step 4: Wire the MAX98357A Amplifier, 8Ω Speaker & Run Gate 4
+<div align="center">
+  <img src="docs/images/max98357a_amp.jpg" width="130" alt="MAX98357A Amp">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/images/speaker_8ohm.jpg" width="130" alt="8 Ohm 3W Speaker">
+</div>
+
+* **What is this?** This is your robot's mouth. The purple board is a 3-Watt Class-D digital amplifier, and the circular metal unit is the 8 Ohm speaker.
+* **What to do?**
+  1. Connect the two speaker wires to the screw terminal blocks on the amplifier (Red to `+`, Black to `-`). Tighten the small screws gently with a screwdriver.
+  2. Connect the amplifier's pins to the ESP32-S3:
+     * `VIN` -> ESP32 **`5V` (`VBUS`)**
+     * `GND` -> ESP32 `GND`
+     * `BCLK` -> `GPIO 15`
+     * `LRC`  -> `GPIO 16`
+     * `DIN`  -> `GPIO 7`
+     * `GAIN` -> Leave disconnected (floating for 9 dB default volume)
+     * `SD`   -> Leave disconnected (or connect to `VIN` through a 100k resistor if your board needs manual pull-up)
+  3. *(Power Cushion)* Insert the large black cylinder capacitor (`1000 µF`) across the `5V` and `GND` rails on the breadboard.
+     * **Polarity Check**: Look for the grey vertical stripe with minus signs (`-`) on the capacitor body. That leg goes to `GND`. The other leg goes to `5V`.
+  4. Plug the USB cable back in.
+* **How to test?** Run:
+  ```powershell
+  python -m platformio run -e gate4_speaker -t upload -t monitor
+  ```
+* **Expected Output**: The speaker will play a clear 440 Hz test tone followed by a pleasant two-note chime at 24 kHz. No crackle or reboots. Unplug the USB cable once verified.
+
+---
+
+#### Step 5: Wire the Push-to-Talk Button & Test Voice Loopback (Gate 5)
+<p align="center">
+  <img src="docs/images/breadboard_ptt.jpg" width="140" alt="Breadboard & Pushbutton">
+</p>
+
+* **What is this?** This is your offline voice verification gate and manual push-to-talk button.
+* **What to do?**
+  1. Insert a 4-pin tactile pushbutton into the breadboard across the center divider.
+  2. Connect one side (Pin A) to `GPIO 1` on the ESP32-S3.
+  3. Connect the diagonal side (Pin B) to `GND`.
+  4. Plug the USB cable back in.
+* **How to test?** Run:
+  ```powershell
+  python -m platformio run -e gate5_loopback -t upload -t monitor
+  ```
+* **Expected Output**:
+  1. Press and hold the pushbutton on the breadboard and speak clearly: *"Hello robot testing 1 2 3."*
+  2. Release the button.
+  3. The speaker will immediately play back your exact recorded voice in crystal-clear audio from PSRAM! If you hear your voice, all audio input and output hardware is 100% verified.
+
+---
+
+#### Step 6: Flash Production Robot Firmware (`robot_main`)
+Once all individual gates pass, you are ready to flash the complete production software:
+```powershell
+python -m platformio run -e robot_main -t upload -t monitor
+```
+Your robot will boot up, display animated eyes on the screen, connect to Wi-Fi, listen hands-free with VAD (Voice Activity Detection), and talk with you using Cloud AI voice!
 
 ---
 
