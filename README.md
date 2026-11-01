@@ -67,16 +67,16 @@ Your `ESP32-S3-WROOM-1-N16R8` has **8 MB of Octal PSRAM**, which allows `robot_m
 
 | Item | Selected Product | Cost (₹) | Order Status |
 | :--- | :--- | :---: | :---: |
-| **ESP32-S3 N16R8 Board** | [VIREXON ESP32-S3 N16R8 (16MB Flash, 8MB PSRAM)](https://www.amazon.in/dp/B0H94PHFSW) | ₹945 | ✅ **Ordered** *(Arriving Sunday)* |
+| **ESP32-S3 N16R8 Board** | [VIREXON ESP32-S3 N16R8 (16MB Flash, 8MB PSRAM)](https://www.amazon.in/dp/B0H94PHFSW) | ₹945 | ✅ **Delivered Today (Nov 1)** |
 | **Audio Modules Combo** | [MAX98357A I²S Amp + INMP441 Mic Audio Combo](https://www.amazon.in/dp/B0H3M78HQV) *(or separately ₹199 + ₹249)* | ₹407 | 🛒 In Shopping List |
 | **8Ω 3W Speaker** | [Mini 2-Inch 8 Ohm 3W Speaker Driver](https://www.amazon.in/dp/B0HNGZX1KV) | ₹290 | 🛒 In Shopping List |
 | **ST7789 IPS Display** | [1.3-inch 240×240 RGB TFT IPS LCD Module (7-Pin ST7789)](https://www.amazon.in/dp/B0CTQXNQWY) | ₹580 | 🛒 In Shopping List |
-| **830-Pt Breadboard Kit** | [ApTechDeals 840-Point Breadboard with 30-pc Jumper Wires](https://www.amazon.in/dp/B07PQS67BN) | ₹196 | ✅ **Delivered Today** |
+| **830-Pt Breadboard Kit** | [ApTechDeals 840-Point Breadboard with 30-pc Jumper Wires](https://www.amazon.in/dp/B07PQS67BN) | ₹196 | ✅ **Delivered (Oct 31)** |
 | **Passives Filtering Pack**| [Robodo 1000uF 25V Electrolytic Capacitors (Pack of 10)](https://www.amazon.in/dp/B09VL23ZP1) + Buttons/Caps | ₹149 | 🛒 In Shopping List |
 | **Soldering Iron Kit** | [Aptechdeals Soldering Kit Beginner 6-in-1](https://www.amazon.in/dp/B07D1PQ7TM) | ₹242 | ✅ **Delivered (Oct 29)** |
-| **TOTAL** | **Estimated Hardware Component Cost (DIY Solder Path)** | **~₹2,809 INR** | **3 of 7 Delivered** |
+| **TOTAL** | **Estimated Hardware Component Cost (DIY Solder Path)** | **~₹2,809 INR** | **4 of 7 Delivered** |
 
-> ℹ️ *Diagnostic Tool: Digital Multimeter is also ✅ **Delivered Today** & Verified.*
+> ℹ️ *Diagnostic Tool: Digital Multimeter is also ✅ **Delivered (Oct 31)** & Verified.*
 
 ---
 
@@ -84,11 +84,14 @@ Your `ESP32-S3-WROOM-1-N16R8` has **8 MB of Octal PSRAM**, which allows `robot_m
 
 | Item | Selected Product / Solderless Alternative | Cost (₹) | Order Status |
 | :--- | :--- | :---: | :---: |
-| **ESP32-S3 N16R8 Board** | [VIREXON ESP32-S3 N16R8](https://www.amazon.in/dp/B0H94PHFSW) *(All 44 pins factory pre-soldered)* | ₹945 | ✅ **Ordered** *(Arriving Sunday)* |
+| **ESP32-S3 N16R8 Board** | [VIREXON ESP32-S3 N16R8](https://www.amazon.in/dp/B0H94PHFSW) *(16MB Flash, 8MB PSRAM)* | ₹945 | ✅ **Delivered Today (Nov 1)** |
 | **Audio Modules Combo** | [MAX98357A + INMP441 Combo](https://www.amazon.in/dp/B0H3M78HQV) *(Pre-soldered or ₹40 local technician fee)* | ₹407 – ₹447 | 🛒 In Shopping List |
 | **8Ω 3W Speaker** | [Mini 2-Inch 8 Ohm 3W Speaker Driver](https://www.amazon.in/dp/B0HNGZX1KV) *(Pre-wired leads)* | ₹290 | 🛒 In Shopping List |
 | **ST7789 IPS Display** | [1.3-inch 240×240 RGB TFT IPS (7-Pin ST7789)](https://www.amazon.in/dp/B0CTQXNQWY) *(Factory pre-soldered)* | ₹580 | 🛒 In Shopping List |
-| **830-Pt Breadboard Kit** | [ApTechDeals 840-Point Breadboard + Jumper Wires](https://www.amazon.in/dp/B07PQS67BN) *(100% plug-and-play)* | ₹196 | ✅ **Delivered Today** |
+| **830-Pt Breadboard Kit** | [ApTechDeals 840-Point Breadboard + Jumper Wires](https://www.amazon.in/dp/B07PQS67BN) *(100% plug-and-play)* | ₹196 | ✅ **Delivered (Oct 31)** |
+| **Passives Filtering Pack**| [Robodo 1000uF 25V Capacitors](https://www.amazon.in/dp/B09VL23ZP1) + Buttons/Caps *(Push-in)* | ₹149 | 🛒 In Shopping List |
+| **Soldering Iron Kit** | **NONE NEEDED** *(Can return delivered kit for ₹242 refund)* | **₹0** | 🔄 Returnable (₹0) |
+| **TOTAL** | **Estimated Hardware Component Cost (100% Solderless Path)** | **~₹2,607 INR** | **3 of 6 Delivered** |
 | **Passives Filtering Pack**| [Robodo 1000uF 25V Capacitors](https://www.amazon.in/dp/B09VL23ZP1) + Buttons/Caps *(Push-in)* | ₹149 | 🛒 In Shopping List |
 | **Soldering Iron Kit** | **NONE NEEDED** *(Can return delivered kit for ₹242 refund)* | **₹0** | 🔄 Returnable (₹0) |
 | **TOTAL** | **Estimated Hardware Component Cost (100% Solderless Path)** | **~₹2,607 INR** | **2 of 6 Ordered** |
