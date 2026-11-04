@@ -358,33 +358,55 @@ def sdf_back_door(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
 
 # ============================================================================
 # Part 6: Articulated Left & Right Movable Arms (`6_arms_left_and_right.stl`)
-#   - Tapered rounded arms + wrist seam + C-shaped hands + 5.8 mm shoulder pegs
+#   - Smooth banana-curved tapered arm (no stepped pipe or ball bump!)
+#   - Angled flush shoulder joint + crisp wrist seam + sculpted thumb & curled fingers
 # ============================================================================
 
 
 def sdf_single_arm(x: np.ndarray, y: np.ndarray, z: np.ndarray, side: float) -> np.ndarray:
-    # Smooth curved arm matching attached photo, with subtle wrist ring groove at z = +15
-    shoulder = sd_sphere(x - side * 1.5, y, z - 18.0, 9.2)
-    upper_arm = sd_cylinder_z(x, y, z - 3.0, 8.5, 16.0)
-    forearm = sd_cylinder_z(x, y, z + 11.0, 7.8, 9.0)
-    arm_body = smin(shoulder, smin(upper_arm, forearm, 4.5), 4.5)
+    # +Z is shoulder top (z = +21.5), -Z is wrist/hand bottom (z = -14.5..-24.5)
+    t = np.clip((21.5 - z) / 36.0, 0.0, 1.0)
+    # Gentle banana curve bowing outward (-side * X in local coords) in mid-arm and curving in at hand
+    bow_x = -side * (3.2 * np.sin(t * math.pi) - 1.8 * (1.0 - t))
+    # Smooth radius profile: R=8.0 at shoulder, swelling to 9.3 at mid-arm, tapering to 7.5 at wrist
+    r_profile = 8.0 + 1.4 * np.sin(t * math.pi) - 0.5 * t
+    arm_tube = np.sqrt((x - bow_x) ** 2 + y ** 2) - r_profile
+    arm_body = np.maximum(arm_tube, np.abs(z - 3.5) - 18.0)
 
-    # Subtle wrist seam groove visible in reference image
+    # Round top shoulder cap at z = +16.5 & bevel inner shoulder face to sit flush against oval torso
+    shoulder_dome = sd_sphere(x - bow_x, y, z - 16.5, 8.8)
+    arm_body = smin(arm_body, shoulder_dome, 3.0)
+    inner_bevel = (side * (x - side * 2.5) + (z - 19.5) * 0.58)
+    arm_body = np.maximum(arm_body, inner_bevel)
+
+    # Crisp horizontal wrist seam groove at z = -13.2 (matches reference photo wrist line)
     wrist_groove = op_subtract(
-        sd_cylinder_z(x, y, z + 16.5, 9.0, 0.6),
-        sd_cylinder_z(x, y, z + 16.5, 7.1, 1.2),
+        sd_cylinder_z(x - bow_x, y, z + 13.2, 9.5, 0.55),
+        sd_cylinder_z(x - bow_x, y, z + 13.2, 6.7, 1.2),
     )
     arm_body = op_subtract(arm_body, wrist_groove)
 
-    # Cute C-shaped Robot Hand at bottom (z = -23)
-    hand_outer = sd_sphere(x, y, z + 22.5, 7.8)
-    hand_cut = sd_cylinder_y(x - side * 1.8, y, z + 24.5, 4.2, 10.0)
-    hand = op_subtract(hand_outer, hand_cut)
-    arm_body = op_union(arm_body, hand)
+    # Sculpted Robot Hand at bottom (z = -14 to -24.5): rounded mitten palm + front-inner thumb + curled fingers
+    hx = x + side * 0.5
+    palm_outer = sd_ellipsoid(hx, y, z + 18.5, 7.6, 6.8, 6.2)
+    # Scoop inner palm facing the body (+side * X, -Y front) so fingers curl inward toward the thighs!
+    palm_scoop = sd_sphere(hx - side * 3.2, y + 1.8, z + 20.0, 4.4)
+    hand = op_subtract(palm_outer, palm_scoop)
 
-    # Shoulder pivot peg extending inward toward torso (+/- X)
-    peg = sd_cylinder_x(x - side * 10.5, y, z - 18.0, 2.9, 5.5)
-    return op_union(arm_body, peg)
+    # Distinct rounded thumb on the front-inner side of the hand (y = -4.0, x = +side * 3.0)
+    thumb = sd_ellipsoid(hx - side * 3.0, y + 4.0, z + 18.0, 2.6, 2.8, 3.8)
+    hand = smin(hand, thumb, 1.2)
+
+    # Two subtle finger separation grooves on the curled outer fingers
+    fg1 = sd_round_box(hx + side * 2.0, y - 0.5, z + 22.2, 4.0, 0.45, 2.5, 0.2)
+    fg2 = sd_round_box(hx + side * 2.0, y + 2.2, z + 22.2, 4.0, 0.45, 2.5, 0.2)
+    hand = op_subtract(hand, op_union(fg1, fg2))
+
+    arm_full = smin(arm_body, hand, 1.2)
+
+    # Hidden shoulder pivot peg extending inward toward torso (+/- X) at z = +15.0
+    peg = sd_cylinder_x(x - side * 6.5, y, z - 15.0, 2.9, 5.5)
+    return op_union(arm_full, peg)
 
 
 def sdf_arms_pair(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
@@ -395,27 +417,32 @@ def sdf_arms_pair(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
 
 # ============================================================================
 # Part 7: Movable Left & Right Thighs (`7_thighs_left_and_right.stl`)
-#   - Sculpted cylindrical thighs that tuck seamlessly into the oval hip sockets
-#   - Top snap-on C-fork hip joint (8.4 mm bore + 0/25/90 deg click-detent notch)
-#   - Bottom spherical/cylindrical ankle ball-and-detent stud (swivel + tilt)
+#   - Tall, wide, gently tapered cylindrical thighs matching `robot_hero.jpg`
+#   - Angled top pelvis saddle cut (`/   \`) + recessed internal hip pivot turret
+#   - Bottom cuff extends over the internal ankle ball so no skinny neck is visible
 # ============================================================================
 
 
-def sdf_single_thigh(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    # Smooth cylindrical thigh with rounded spherical hip dome at z = +9 that tucks into oval belly
-    hip_dome = sd_sphere(x, y, z - 9.0, 12.8)
-    thigh_shaft = sd_cylinder_z(x, y, z + 1.5, 12.6, 11.5)
-    thigh_body = smin(hip_dome, thigh_shaft, 2.5)
-    # Flatten bottom cuff of thigh shaft at z = -12.0 where it meets the shoe collar
-    thigh_body = np.maximum(thigh_body, -(z + 12.0))
+def sdf_single_thigh(x: np.ndarray, y: np.ndarray, z: np.ndarray, side: float = 1.0) -> np.ndarray:
+    # +Z is top hip saddle (z = +13.5), -Z is bottom ankle cuff (z = -13.0) -> 26.5 mm tall visible pillar!
+    r_leg = 13.6 - 0.045 * (13.5 - z)  # 13.6 mm at hip tapering smoothly to 12.4 mm at ankle
+    leg_cyl = np.sqrt(x * x + (y / 1.06) ** 2) - r_leg
+    # Top angled saddle plane matching the lower oval curve of the belly + flat bottom cuff at z = -13.0
+    top_saddle = (z - 13.0 + side * x * 0.26)
+    bot_cuff = -(z + 13.0)
+    thigh_outer = np.maximum(leg_cyl, np.maximum(top_saddle, bot_cuff))
 
-    # Snap-fit 8.4 mm Hip Axle Bore + C-clip snap throat at top (z = +9.0) + detent groove
-    hip_bore = sd_cylinder_x(x, y, z - 9.0, 4.25, 10.5)
-    snap_throat = sd_round_box(x, y, z - 16.0, 9.0, 3.3, 6.0, 0.5)
-    detent_groove_v = sd_round_box(x, y, z - 13.2, 9.0, 1.1, 1.4, 0.3)
-    detent_groove_h = sd_round_box(x, y + 4.2, z - 9.0, 9.0, 1.4, 1.1, 0.3)
-    # Lightweight internal hollow pocket inside lower thigh (reduces PLA weight)
-    thigh_hollow = sd_cylinder_z(x, y, z + 2.5, 7.5, 6.0)
+    # Internal Hip Pivot Turret rising at z = +17.0 that slots inside the torso's hip socket
+    hip_turret = sd_cylinder_x(x, y, z - 17.0, 9.6, 7.8)
+    thigh_body = smin(thigh_outer, hip_turret, 2.0)
+
+    # Snap-fit 8.4 mm Hip Axle Bore + C-clip snap throat at top (z = +17.0) + click-detent grooves
+    hip_bore = sd_cylinder_x(x, y, z - 17.0, 4.25, 9.5)
+    snap_throat = sd_round_box(x, y, z - 23.0, 8.5, 3.3, 5.0, 0.5)
+    detent_groove_v = sd_round_box(x, y, z - 21.0, 8.5, 1.1, 1.4, 0.3)
+    detent_groove_h = sd_round_box(x, y + 4.2, z - 17.0, 8.5, 1.4, 1.1, 0.3)
+    # Lightweight internal hollow pocket inside thigh (reduces PLA weight)
+    thigh_hollow = sd_cylinder_z(x, y, z + 1.0, 8.2, 8.5)
     thigh_body = op_subtract(
         thigh_body,
         op_union(
@@ -424,44 +451,48 @@ def sdf_single_thigh(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
         ),
     )
 
-    # Bottom Swivel + Tilt Ankle Pivot Boss (z = -15.5) with flat-standing detent key
-    ankle_neck = sd_cylinder_z(x, y, z + 13.5, 6.2, 3.5)
-    ankle_ball = sd_sphere(x, y, z + 16.5, 7.2)
-    ankle_key = sd_round_box(x, y, z + 16.5, 7.6, 1.2, 2.0, 0.4)
+    # Bottom Swivel + Tilt Ankle Ball Stud at z = -17.0 tucked right below the wide thigh cuff
+    ankle_neck = sd_cylinder_z(x, y, z + 14.0, 6.4, 2.5)
+    ankle_ball = sd_sphere(x, y, z + 17.0, 7.2)
+    ankle_key = sd_round_box(x, y, z + 17.0, 7.6, 1.2, 2.0, 0.4)
     return op_union(thigh_body, op_union(ankle_neck, op_union(ankle_ball, ankle_key)))
 
 
 def sdf_thighs_pair(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    left_thigh = sdf_single_thigh(x + 17.5, y, z)
-    right_thigh = sdf_single_thigh(x - 17.5, y, z)
+    left_thigh = sdf_single_thigh(x + 17.5, y, z, -1.0)
+    right_thigh = sdf_single_thigh(x - 17.5, y, z, +1.0)
     return op_union(left_thigh, right_thigh)
 
 
 # ============================================================================
 # Part 8: Movable Left & Right Shoes/Feet (`8_feet_left_and_right.stl`)
-#   - Wide pill-shaped robot shoes with raised ankle collar rim & flat sole
+#   - Smooth domed sneaker-pod shoes (`sd_ellipsoid` toe) + wraparound raised ankle collar rim
 # ============================================================================
 
 
 def sdf_single_foot(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    # Plump rounded shoe with forward toe (+Y) and raised ankle collar rim matching photo
-    shoe_base = sd_round_box(x, y + 4.0, z + 2.5, 15.0, 20.0, 6.8, 6.2)
-    ankle_collar = sd_cylinder_z(x, y - 0.5, z - 4.0, 13.8, 4.5)
-    foot_outer = smin(shoe_base, ankle_collar, 2.8)
+    # +Z is top ankle collar (z = +7.5), -Z is flat bottom sole (z = -8.5); -Y is forward toe!
+    toe_dome = sd_ellipsoid(x, y + 5.0, z + 3.5, 15.6, 21.5, 11.2)
+    heel_dome = sd_ellipsoid(x, y - 2.0, z + 2.0, 15.0, 15.5, 11.5)
+    shoe_pod = smin(toe_dome, heel_dome, 4.0)
 
-    # Recessed cup inside top of ankle collar so the thigh sits slightly inside the shoe rim
-    collar_recess = sd_cylinder_z(x, y - 0.5, z - 8.2, 12.9, 2.2)
-    foot_outer = op_subtract(foot_outer, collar_recess)
+    # Raised wraparound ankle collar rim at top of shoe (z = +3.5) that hugs the bottom of the wide thigh!
+    collar_outer = sd_cylinder_z(x, y - 1.0, z - 3.5, 14.2, 4.2)
+    foot_outer = smin(shoe_pod, collar_outer, 2.5)
 
-    # Exact flat bottom sole at z = -9.0 for rock-solid standing balance
-    sole_clip = z + 9.0
+    # Deep concave ankle cup inside the raised collar rim (z = +6.8) so the wide thigh sits down inside the collar
+    collar_cup = sd_cylinder_z(x, y - 1.0, z - 6.8, 12.8, 3.2)
+    foot_outer = op_subtract(foot_outer, collar_cup)
+
+    # Exact flat bottom sole at z = -8.5 for rock-solid standing balance
+    sole_clip = z + 8.5
     foot_outer = np.maximum(foot_outer, -sole_clip)
 
     # Top Snap-In Ankle Socket (mates with thigh ankle_ball + 0-deg flat-standing detent slot)
-    socket_sphere = sd_sphere(x, y, z - 4.5, 7.5)
-    socket_throat = sd_cylinder_z(x, y, z - 8.0, 6.7, 4.0)
-    detent_slot_0 = sd_round_box(x, y, z - 4.5, 8.0, 1.4, 2.5, 0.4)
-    detent_slot_stride = sd_round_box(x, y, z - 4.5, 1.4, 8.0, 2.5, 0.4)
+    socket_sphere = sd_sphere(x, y - 1.0, z - 1.5, 7.5)
+    socket_throat = sd_cylinder_z(x, y - 1.0, z - 4.5, 6.7, 3.5)
+    detent_slot_0 = sd_round_box(x, y - 1.0, z - 1.5, 8.0, 1.4, 2.5, 0.4)
+    detent_slot_stride = sd_round_box(x, y - 1.0, z - 1.5, 1.4, 8.0, 2.5, 0.4)
     return op_subtract(
         foot_outer,
         op_union(op_union(socket_sphere, socket_throat), op_union(detent_slot_0, detent_slot_stride)),
@@ -667,25 +698,25 @@ def main() -> None:
         ),
         (
             "6_arms_left_and_right.stl",
-            "Articulated Left & Right Movable Arms (C-Hands)",
+            "Articulated Left & Right Movable Arms (Thumb + Curled Fingers)",
             sdf_arms_pair,
-            ((-34.0, 34.0), (-14.0, 14.0), (-34.0, 30.0)),
-            0.75,
+            ((-36.0, 36.0), (-14.0, 14.0), (-27.0, 26.0)),
+            0.70,
             (232, 236, 242),
         ),
         (
             "7_thighs_left_and_right.stl",
             "Movable Hip-Pivot Thighs (0/25/90 deg Click-Detents + Ankle Ball)",
             sdf_thighs_pair,
-            ((-33.0, 33.0), (-15.0, 15.0), (-25.0, 23.0)),
+            ((-34.0, 34.0), (-17.0, 17.0), (-26.0, 29.0)),
             0.70,
-            (226, 232, 240),
+            (232, 236, 242),
         ),
         (
             "8_feet_left_and_right.stl",
-            "Movable Swivel/Tilt Shoes with Flat-Standing Detents",
+            "Movable Swivel/Tilt Shoes with Wraparound Ankle Collars",
             sdf_feet_pair,
-            ((-35.0, 35.0), (-25.0, 20.0), (-11.0, 11.0)),
+            ((-35.0, 35.0), (-28.0, 20.0), (-10.0, 10.0)),
             0.70,
             (236, 240, 245),
         ),
@@ -712,28 +743,28 @@ def main() -> None:
     visor_v, visor_f, _, _, _ = built_parts["2_front_visor_bezel.stl"]
     btn_v, btn_f, _, _, _ = built_parts["3_top_ptt_button_cap.stl"]
 
-    # Feet sit on the ground at z = 0..18 mm
+    # Feet sit on the ground at z = 0..16.2 mm
     feet_world = feet_v.copy()
-    # Thighs sit down inside the raised shoe ankle collars (z = +8.5 mm)
+    # Thighs sit 2.5 mm down inside the shoe's raised ankle collar rim (z = +1.8 mm -> zero skinny neck visible!)
     thighs_world = thighs_v.copy()
-    thighs_world[:, 2] += 8.5
-    # Oval torso nestles directly onto the spherical hip domes (z = +26.5 mm -> seamless curved hip joint!)
+    thighs_world[:, 2] += 1.8
+    # Oval torso sits on top of the tall thigh pillars (z = +36.0 mm -> full 25 mm tall thighs + angled hip seam!)
     torso_world = torso_v.copy()
-    torso_world[:, 2] += 26.5
+    torso_world[:, 2] += 36.0
 
-    # Position head on top of torso (z = +89.0 mm)
+    # Position head on top of torso (z = +98.0 mm)
     head_world = head_v.copy()
-    head_world[:, 2] += 89.0
+    head_world[:, 2] += 98.0
 
     # Rotate visor 90 deg around X to sit on the front of the head (y = -32.0 mm)
     visor_world = np.zeros_like(visor_v)
     visor_world[:, 0] = visor_v[:, 0]
     visor_world[:, 1] = -visor_v[:, 2] - 32.0
-    visor_world[:, 2] = visor_v[:, 1] + 89.0 + 39.0
+    visor_world[:, 2] = visor_v[:, 1] + 98.0 + 39.0
 
     # Place button cap at top of head + glowing cyan LED ring collar
     btn_world = btn_v.copy()
-    btn_world[:, 2] += 89.0 + 73.0
+    btn_world[:, 2] += 98.0 + 73.0
 
     halo_v, halo_f = build_mesh_from_sdf(
         lambda x, y, z: op_subtract(
@@ -743,9 +774,9 @@ def main() -> None:
         ((-18.0, 18.0), (-18.0, 18.0), (-2.0, 2.0)),
         step=0.6,
     )
-    halo_v[:, 2] += 89.0 + 75.5
+    halo_v[:, 2] += 98.0 + 75.5
 
-    # Split left & right arms and place flush against upper oval shoulders (x = +/-42.5, z = +39)
+    # Split left & right arms and place flush against upper oval shoulders (x = +/-38.5, z = +45.5)
     arm_l_v = sdf_single_arm_mesh(-1.0)
     arm_r_v = sdf_single_arm_mesh(+1.0)
 
@@ -756,7 +787,7 @@ def main() -> None:
         step=0.8,
     )
     scr_v[:, 1] -= 31.0
-    scr_v[:, 2] += 89.0 + 25.0
+    scr_v[:, 2] += 98.0 + 25.0
 
     def sdf_cute_face(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
         # Left & right glowing cyan ring eyes (R_outer=5.2, R_inner=2.4)
@@ -799,7 +830,7 @@ def main() -> None:
         step=0.45,
     )
     eye_v[:, 1] -= 32.3
-    eye_v[:, 2] += 89.0 + 28.5
+    eye_v[:, 2] += 98.0 + 28.5
 
     assembled_meshes = [
         (feet_world, feet_f, (238, 242, 247)),
@@ -821,8 +852,8 @@ def main() -> None:
         img_h=860,
         yaw_deg=-24.0,
         pitch_deg=12.0,
-        scale=3.85,
-        center_offset=(0.0, 0.0, 84.0),
+        scale=3.70,
+        center_offset=(0.0, 0.0, 88.0),
     )
 
     sheet = Image.new("RGB", (1500, 860), (14, 18, 26))
@@ -836,9 +867,9 @@ def main() -> None:
         ("3_top_ptt_button_cap.stl", 720, 235, 3.3, (0.0, 0.0, 4.0)),
         ("4_torso_shell.stl", 1105, 235, 1.85, (0.0, 0.0, 34.0)),
         ("5_back_access_door.stl", 720, 435, 2.4, (0.0, 0.0, 2.0)),
-        ("6_arms_left_and_right.stl", 1105, 435, 1.95, (0.0, 0.0, 28.0)),
-        ("7_thighs_left_and_right.stl", 720, 635, 2.2, (0.0, 0.0, 18.0)),
-        ("8_feet_left_and_right.stl", 1105, 635, 2.1, (0.0, 0.0, 9.0)),
+        ("6_arms_left_and_right.stl", 1105, 435, 1.95, (0.0, 0.0, 24.0)),
+        ("7_thighs_left_and_right.stl", 720, 635, 2.1, (0.0, 0.0, 22.0)),
+        ("8_feet_left_and_right.stl", 1105, 635, 2.1, (0.0, 0.0, 8.0)),
     ]
 
     for fname, gx, gy, gscale, goff in grid_positions:
@@ -880,9 +911,9 @@ def sdf_single_arm_mesh(side: float) -> Tuple[np.ndarray, np.ndarray]:
     def fn(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
         return sdf_single_arm(x, y, z, side)
 
-    v, f = build_mesh_from_sdf(fn, ((-15.0, 15.0), (-12.0, 12.0), (-33.0, 29.0)), step=0.8)
-    v[:, 0] += -side * 39.8
-    v[:, 2] += 35.5
+    v, f = build_mesh_from_sdf(fn, ((-15.0, 15.0), (-12.0, 12.0), (-27.0, 26.0)), step=0.75)
+    v[:, 0] += -side * 38.2
+    v[:, 2] += 45.0
     return v, f
 
 
