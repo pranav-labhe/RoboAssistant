@@ -110,6 +110,18 @@ This visual reference maps each physical component arriving in your delivery dir
 
 ---
 
+### 🖨️ 3D-Printable Robot Enclosure (`cad/` — 180 mm Tall, 6 Snap-Together `.STL` Parts)
+
+<p align="center">
+  <img src="cad/robot_cad_preview.png" width="100%" alt="RoboAssistant 3D-Printable CAD Assembly & STL Parts">
+</p>
+
+All **6 watertight `.STL` files** and the parametric Python CSG generator live in [`cad/`](cad/README.md), custom-dimensioned to fit the exact ordered hardware (`ESP32-S3 N16R8 HW678`, `1.3" 7-Pin ST7789`, `Electrobot 48mm 8Ω 3W Speaker`, `INMP441`, `MAX98357A`, `6×6×6mm PTT Button`, and an `SG90` right-shoulder servo socket for `[WAVE]`):
+* 📄 **Full Printing & Assembly Guide**: [`cad/README.md`](cad/README.md)
+* 🧱 **Ready-to-Print `.STL` Files**: [`1_head_shell.stl`](cad/stl/1_head_shell.stl) · [`2_front_visor_bezel.stl`](cad/stl/2_front_visor_bezel.stl) · [`3_top_ptt_button_cap.stl`](cad/stl/3_top_ptt_button_cap.stl) · [`4_torso_and_feet.stl`](cad/stl/4_torso_and_feet.stl) · [`5_back_access_door.stl`](cad/stl/5_back_access_door.stl) · [`6_arms_left_and_right.stl`](cad/stl/6_arms_left_and_right.stl)
+
+---
+
 ### 📋 4-Step Pre-Flight Checklist (When Your Packages Arrive)
 
 Before plugging anything into USB or power, verify these 4 items:

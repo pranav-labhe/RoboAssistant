@@ -1,0 +1,67 @@
+# 🤖 RoboAssistant — 3D-Printable Enclosure & CAD Package (`180 mm` Tall)
+
+<p align="center">
+  <img src="robot_cad_preview.png" width="100%" alt="RoboAssistant 6-Part 3D Printable CAD Preview">
+</p>
+
+This folder contains the parametric 3D-printable enclosure for **RoboAssistant**, modeled directly after [`docs/images/robot_hero.jpg`](../docs/images/robot_hero.jpg) and sized to the exact millimeter specifications of the hardware in [`README.md`](../README.md):
+
+* **MCU**: `VIREXON ESP32-S3-WROOM-1-N16R8` (`HW678 V0.0.0`, `28.5 × 65 mm` PCB)
+* **Face Display**: `1.3" 240×240 RGB TFT IPS 7-Pin ST7789` (`B0G4F3XGYY`, `26.5 × 26.5 mm` active area, `35.5 × 39.0 mm` PCB)
+* **Speaker**: `Electrobot 48mm (2-Inch) 8Ω 3W Speaker` (`B0HLH3VTNK`)
+* **Microphone & Amp**: `INMP441` 6-Pin MEMS Mic + `MAX98357A` 3W Class-D Amp (`B0H5X6RNPW`)
+* **Top Push-to-Talk Button**: `6×6×6mm` 4-Pin Momentary Tactile Switch (`B0H3PVBZ7D` on `GPIO 1`)
+* **Future Waving Arm Motor**: Pre-molded right-shoulder socket for an `SG90` 9g Micro Servo (`GPIO 18`)
+
+---
+
+## 📦 1. Ready-to-Print `.STL` Files (`cad/stl/`)
+
+You can upload these 6 `.STL` files directly to any online 3D printing service in India (such as **Robu.in Online 3D Printing**, **Think3D**, or any local 3D print studio in **Nagpur**):
+
+| File Path | Dimensions (`X × Y × Z`) | Recommended Filament Color | Purpose & Internal Features |
+| :--- | :---: | :---: | :--- |
+| [`stl/1_head_shell.stl`](stl/1_head_shell.stl) | `84 × 68 × 74 mm` | **Matte White PLA** | Rounded squircle head with:<ul><li>Front `26.6 × 26.6 mm` ST7789 window + internal PCB guide rails</li><li>Right & Left "Ear" 19-hole honeycomb acoustic grilles + internal `48.8 mm` ID collar for the `2-Inch 8Ω 3W` speaker</li><li>Top `28.6 mm` button collar + internal bridge holding the `6×6mm` tactile switch</li><li>Top-front `3.6 mm` pinhole + internal **acoustic isolation baffle ring** for the `INMP441` mic (prevents speaker vibrations from echoing into the mic)</li></ul> |
+| [`stl/2_front_visor_bezel.stl`](stl/2_front_visor_bezel.stl) | `63 × 51 × 5 mm` | **Matte Black PLA** | Snap-in front visor bezel that frames the `1.3" ST7789` display and gives the signature black-face contrast from `robot_hero.jpg`. |
+| [`stl/3_top_ptt_button_cap.stl`](stl/3_top_ptt_button_cap.stl) | `30 × 30 × 8 mm` | **Cool Grey / Cyan PLA** | Circular top actuator cap (`28 mm` top diameter) with retention flange and center plunger that presses the `6×6mm` `GPIO 1` tactile button. |
+| [`stl/4_torso_and_feet.stl`](stl/4_torso_and_feet.stl) | `84 × 68 × 102 mm` | **Matte White PLA** | Chubby rounded belly + legs + wide flat-bottomed pill feet with:<ul><li>Internal vertical PCB guide rails for `ESP32-S3 N16R8` (`HW678 V0.0.0`)</li><li>Hollow neck wire-routing channel (`25 mm` ID) for `Male-to-Female` ribbon jumper wires</li><li>Left & Right `6.4 mm` shoulder pivot sockets + right-shoulder `SG90` servo pocket (`23.2 × 12.6 mm`)</li><li>Lower-rear USB-C cable access port (`16 × 9 mm`)</li></ul> |
+| [`stl/5_back_access_door.stl`](stl/5_back_access_door.stl) | `55 × 47 × 5 mm` | **Matte White PLA** | Snap-fit rear service door with 3 ventilation louvers (fits both the rear head access opening and the rear torso service opening). |
+| [`stl/6_arms_left_and_right.stl`](stl/6_arms_left_and_right.stl) | `60 × 19 × 55 mm` | **Matte White PLA** | Pair of articulated tapered arms with cute C-shaped hands and `5.8 mm` shoulder pivot pegs. |
+
+---
+
+## 🖨️ 2. Recommended 3D Printer / Service Settings
+
+When ordering from an online or local 3D printing shop, specify:
+* **Material**: Standard **PLA** or **PLA+** (Matte White for parts `1, 4, 5, 6`, Matte Black for part `2`, Grey/Cyan for part `3`).
+* **Layer Height**: `0.20 mm`
+* **Wall / Perimeter Count**: `3 walls` (`1.2 mm` shell)
+* **Infill**: `15% Gyroid` or `Grid`
+* **Supports**: **Tree Supports (Touching Buildplate Only)** for `1_head_shell.stl` and `4_torso_and_feet.stl`; **No Supports** needed for `2_front_visor_bezel.stl`, `3_top_ptt_button_cap.stl`, and `5_back_access_door.stl`.
+* **Estimated Total Filament Weight**: `~165g` total across all 6 parts (`~₹250 – ₹380` at standard Indian 3D print rates).
+
+---
+
+## 🔧 3. How to Assemble the Electronics Inside the Body
+
+1. **Mount the Head Components (`1_head_shell.stl`)**:
+   * Drop the **`3_top_ptt_button_cap.stl`** into the top hole from the *inside* of the head, then push your **`6×6mm` tactile button** (`GPIO 1`) into the internal bridge cradle right underneath the plunger.
+   * Slide your **`1.3" ST7789` 7-Pin Display** into the internal front guide rails (screen facing forward) and snap **`2_front_visor_bezel.stl`** into the front visor recess.
+   * Press the **`INMP441` Microphone** (gold acoustic hole facing forward!) into the top-front circular isolation ring.
+   * Seat the **`48mm 8Ω 3W` Speaker** into the right-ear internal `48.8 mm` retention collar.
+2. **Route the `Male-to-Female` Ribbon Wires Through the Neck**:
+   * Pass the jumper wires from the Display, Mic, Speaker, and Top Button down through the hollow `25 mm` neck channel into the torso (`4_torso_and_feet.stl`).
+3. **Mount the Torso Components (`4_torso_and_feet.stl`)**:
+   * Slide your **`ESP32-S3` (`HW678 V0.0.0`)** into the internal torso rails with the **LEFT USB-C port (`USB`)** facing down toward the rear USB-C cable slot.
+   * Place the **`MAX98357A` Amplifier** and **`1000µF 25V` Capacitor** beside the ESP32-S3 inside the belly cavity.
+   * Snap the **Left and Right Arms (`6_arms_left_and_right.stl`)** into the shoulder sockets, and close the rear hatch with **`5_back_access_door.stl`**!
+
+---
+
+## 🔄 4. Re-Generating or Customizing Dimensions
+
+If you ever want to tweak a dimension, wall thickness, or tolerance, edit [`generate_robot_stl.py`](generate_robot_stl.py) and run:
+
+```powershell
+python cad/generate_robot_stl.py
+```
