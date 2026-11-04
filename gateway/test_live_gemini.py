@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 import struct
 import httpx
 from adapters import GeminiLLM, GeminiSTT, GeminiTTS
-from app import app
+from app import app, extract_action_tag
 
 # ============================================================================
 # Live Gemini Voice Test (Runs on your Dell Laptop Speakers!)
@@ -49,11 +49,15 @@ async def main() -> None:
 
         print(f"\n[2/3] Generating 24 kHz Robot Voice via Gemini TTS ({tts.model}, voice={tts.voice})...")
         pcm_chunks = bytearray()
+        detected_action = None
         for s in sentences:
-            clean_s = s.replace("[WAVE]", "").strip()
+            act, clean_s = extract_action_tag(s)
+            if act and detected_action is None:
+                detected_action = act
             if clean_s:
                 async for chunk in tts.speak(clean_s):
                     pcm_chunks.extend(chunk)
+        print(f"      Extracted Expression / Action Tag: {detected_action or 'NEUTRAL'}")
 
         out_wav = os.path.join(tempfile.gettempdir(), "robo_gemini_reply.wav")
         save_24k_pcm_as_wav(bytes(pcm_chunks), out_wav)

@@ -130,12 +130,17 @@ async def echo_pcm(
 
 
 def extract_action_tag(sentence: str) -> tuple[Optional[str], str]:
-    """Extracts [WAVE] tag anywhere in a sentence so TTS never reads it aloud."""
+    """Extracts [WAVE], [HAPPY], [SURPRISED], or [SAD] and strips bracketed tags so TTS never reads them aloud."""
     trimmed = sentence.strip()
-    if re.search(r"\[wave\]", trimmed, flags=re.IGNORECASE):
-        cleaned = re.sub(r"\s*\[wave\]\s*", " ", trimmed, flags=re.IGNORECASE).strip()
-        return "WAVE", cleaned
-    return None, trimmed
+    action: Optional[str] = None
+    for tag in ("WAVE", "HAPPY", "SURPRISED", "SAD"):
+        if re.search(rf"\[{tag}\]", trimmed, flags=re.IGNORECASE):
+            if action is None:
+                action = tag
+            trimmed = re.sub(rf"\s*\[{tag}\]\s*", " ", trimmed, flags=re.IGNORECASE).strip()
+    # Strip any other short bracketed stage directions (e.g. [WINK], [LAUGH])
+    trimmed = re.sub(r"\s*\[[A-Za-z_ \-]{1,16}\]\s*", " ", trimmed).strip()
+    return action, trimmed
 
 
 @app.post("/talk")

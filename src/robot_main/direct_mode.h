@@ -31,8 +31,9 @@ static constexpr size_t DIRECT_MAX_HISTORY      = 6;                            
 static const char* const DIRECT_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
 static const char* const DIRECT_SYSTEM_PROMPT =
     "You are a cheerful small tabletop robot. Reply in plain spoken English "
-    "under 25 words without markdown. If waving hello or goodbye, prefix your "
-    "reply with [WAVE].";
+    "under 25 words without markdown. Prefix your reply with [WAVE] when "
+    "greeting or saying goodbye, or optionally [HAPPY], [SURPRISED], or [SAD] "
+    "to match your emotion.";
 
 static uint8_t* g_directWavPsram  = nullptr;
 static uint8_t* g_directReqPsram  = nullptr;
@@ -274,18 +275,49 @@ static bool directReplyChit(const String& transcript, String& reply) {
     return true;
 }
 
-static bool extractWaveTag(String& reply) {
-    bool found = false;
+static RobotExpression extractExpressionTag(String& reply, const char*& outTagLabel) {
+    RobotExpression expr = EXPR_NEUTRAL;
+    outTagLabel = "";
+
+    struct TagMap {
+        const char* tag;
+        size_t len;
+        RobotExpression expr;
+        const char* label;
+    };
+    static const TagMap kTags[] = {
+        {"[WAVE]",      6, EXPR_WAVE,      "[WAVE] "},
+        {"[HAPPY]",     7, EXPR_HAPPY,     "[HAPPY] "},
+        {"[SURPRISED]", 11, EXPR_SURPRISED, "[SURPRISED] "},
+        {"[SAD]",       5, EXPR_SAD,       "[SAD] "},
+    };
+
+    for (const auto& item : kTags) {
+        while (true) {
+            String upper = reply;
+            upper.toUpperCase();
+            int idx = upper.indexOf(item.tag);
+            if (idx < 0) break;
+            if (expr == EXPR_NEUTRAL) {
+                expr = item.expr;
+                outTagLabel = item.label;
+            }
+            reply = reply.substring(0, idx) + " " + reply.substring(idx + item.len);
+            reply.trim();
+        }
+    }
+
+    // Strip any other short bracketed stage directions (e.g. [WINK], [LAUGH]) so TTS never speaks them
     while (true) {
-        String upper = reply;
-        upper.toUpperCase();
-        int idx = upper.indexOf("[WAVE]");
-        if (idx < 0) break;
-        found = true;
-        reply = reply.substring(0, idx) + " " + reply.substring(idx + 6);
+        int openIdx = reply.indexOf('[');
+        if (openIdx < 0) break;
+        int closeIdx = reply.indexOf(']', openIdx + 1);
+        if (closeIdx < 0 || (closeIdx - openIdx) > 16) break;
+        reply = reply.substring(0, openIdx) + " " + reply.substring(closeIdx + 1);
         reply.trim();
     }
-    return found;
+
+    return expr;
 }
 
 // Locates the base64 audio inside the Gemini TTS JSON *in place* (no JSON DOM:
@@ -376,8 +408,10 @@ static void processDirectTurn(size_t sampleCount) {
     if (!llmOk || reply.length() == 0) { directShowError("LLM"); flushMicAfterPlayback(); return; }
     const uint32_t t2 = millis();
 
-    const bool wave = extractWaveTag(reply);
-    Serial.printf("[DIRECT] Robot says: %s%s\n", wave ? "[WAVE] " : "", reply.c_str());
+    const char* tagLabel = "";
+    const RobotExpression expr = extractExpressionTag(reply, tagLabel);
+    if (reply.length() == 0) { directShowError("LLM"); flushMicAfterPlayback(); return; }
+    Serial.printf("[DIRECT] Robot says: %s%s\n", tagLabel, reply.c_str());
 
     size_t pcmBytes = 0;
     uint32_t sampleRate = TTS_DEFAULT_RATE;
@@ -389,7 +423,8 @@ static void processDirectTurn(size_t sampleCount) {
     directHistoryAppend("model", reply);
 
     ESP_ERROR_CHECK(i2s_set_clk(AMP_I2S_PORT, sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO));
-    if (wave) {
+    g_activeExpression = expr;
+    if (expr == EXPR_WAVE) {
         triggerServoWaveIfEnabled();
     }
     RobotVoiceI2SSink speaker(g_prebufPsram, PREBUFFER_BYTES);
@@ -401,6 +436,7 @@ static void processDirectTurn(size_t sampleCount) {
                   static_cast<unsigned long>(t1 - t0), static_cast<unsigned long>(t2 - t1),
                   static_cast<unsigned long>(t3 - t2), static_cast<unsigned long>(t3 - t0),
                   static_cast<unsigned>(pcmBytes), static_cast<unsigned long>(sampleRate), ESP.getFreeHeap());
+    g_activeExpression = EXPR_NEUTRAL;
     g_robotState = STATE_IDLE;
     flushMicAfterPlayback();
 }

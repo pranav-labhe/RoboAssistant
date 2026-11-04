@@ -68,15 +68,15 @@ Your `ESP32-S3-WROOM-1-N16R8` has **8 MB of Octal PSRAM**, which allows `robot_m
 | Item | Selected Product | Cost (₹) | Status |
 | :--- | :--- | :---: | :---: |
 | **ESP32-S3 N16R8 Board** | [VIREXON ESP32-S3 N16R8 (16MB Flash, 8MB PSRAM)](https://www.amazon.in/dp/B0H94PHFSW) | ₹945 | ✅ |
-| **Audio Modules Combo** | **Fastest:** [MAX98357A + INMP441 Combo (`B0H5X6RNPW`)](https://www.amazon.in/dp/B0H5X6RNPW) *(or [`B0GT4N822M`](https://www.amazon.in/dp/B0GT4N822M) ₹426)* | ₹426 – ₹499 | 🛒 |
-| **8Ω Speaker** | **Fastest:** [40mm 8Ω (`B07MTK843Z`)](https://www.amazon.in/dp/B07MTK843Z) / [8Ω Rectangular (`B0BN42GNFY`)](https://www.amazon.in/dp/B0BN42GNFY) *(or [8Ω 3W 2-Pack `B0HLH3VTNK`](https://www.amazon.in/dp/B0HLH3VTNK))* | ₹106 – ₹299 | 🛒 |
-| **ST7789 IPS Display** | **7-Pin Default:** [1.3-inch 240×240 RGB TFT IPS 7-Pin ST7789 (`B0G4F3XGYY`)](https://www.amazon.in/dp/B0G4F3XGYY) *(8-Pin Alt: [`B0HD7S7BBF`](https://www.amazon.in/dp/B0HD7S7BBF))* | ₹499 | 🛒 |
+| **Audio Modules Combo** | **Fastest:** [MAX98357A + INMP441 Combo (`B0H5X6RNPW`)](https://www.amazon.in/dp/B0H5X6RNPW) *(or [`B0GT4N822M`](https://www.amazon.in/dp/B0GT4N822M) ₹426)* | ₹426 – ₹499 | 📦 |
+| **8Ω Speaker** | **Ordered (2-Pack):** [Electrobot 48mm (2-Inch) 8 Ohm 3W Speakers (`B0HLH3VTNK`)](https://www.amazon.in/dp/B0HLH3VTNK) *(Alt: [40mm 8Ω `B07MTK843Z`](https://www.amazon.in/dp/B07MTK843Z))* | ₹106 – ₹299 | 📦 |
+| **ST7789 IPS Display** | **7-Pin Default:** [1.3-inch 240×240 RGB TFT IPS 7-Pin ST7789 (`B0G4F3XGYY`)](https://www.amazon.in/dp/B0G4F3XGYY) *(8-Pin Alt: [`B0HD7S7BBF`](https://www.amazon.in/dp/B0HD7S7BBF))* | ₹499 | 📦 |
 | **830-Pt Breadboard Kit** | [ApTechDeals 840-Point Breadboard with 30-pc Jumper Wires](https://www.amazon.in/dp/B07PQS67BN) | ₹196 | ✅ |
-| **Passives, Button & Pins** | [1000uF Caps (`B09VL23ZP1`)](https://www.amazon.in/dp/B09VL23ZP1) + [6x6mm Buttons (`B0H3PVBZ7D`)](https://www.amazon.in/dp/B0H3PVBZ7D) + [40-Pin Male Headers (`B0BG7K3CGM`)](https://www.amazon.in/dp/B0BG7K3CGM) | ₹209 + ₹149 + ₹99 | 🛒 |
+| **Passives, Button & Pins** | [1000uF Caps (`B09VL23ZP1`)](https://www.amazon.in/dp/B09VL23ZP1) + [6x6mm Buttons (`B0H3PVBZ7D`)](https://www.amazon.in/dp/B0H3PVBZ7D) + [40-Pin Male Headers (`B0BG7K3CGM`)](https://www.amazon.in/dp/B0BG7K3CGM) | ₹209 + ₹149 + ₹99 | 📦 |
 | **Soldering Iron Kit** | [Aptechdeals Soldering Kit Beginner 6-in-1](https://www.amazon.in/dp/B07D1PQ7TM) | ₹242 | ✅ |
-| **TOTAL** | **Estimated Hardware Component Cost (DIY Solder Path)** | **~₹2,725 INR** | — |
+| **TOTAL** | **Estimated Hardware Component Cost (DIY Solder Path)** | **~₹2,918 INR** | — |
 
-> ℹ️ *Diagnostic Tool: Digital Multimeter is also ✅.*
+> ℹ️ *Diagnostic Tool: Digital Multimeter (`DT830D`) is also ✅. (`✅` = Delivered in hand, `📦` = Ordered / In transit).*
 
 ---
 
@@ -85,13 +85,13 @@ Your `ESP32-S3-WROOM-1-N16R8` has **8 MB of Octal PSRAM**, which allows `robot_m
 | Item | Selected Product / Solderless Alternative | Cost (₹) | Status |
 | :--- | :--- | :---: | :---: |
 | **ESP32-S3 N16R8 Board** | [VIREXON ESP32-S3 N16R8](https://www.amazon.in/dp/B0H94PHFSW) *(16MB Flash, 8MB PSRAM)* | ₹945 | ✅ |
-| **Audio Modules Combo** | **Fastest:** [MAX98357A + INMP441 Combo (`B0H5X6RNPW`)](https://www.amazon.in/dp/B0H5X6RNPW) *(or [`B0GT4N822M`](https://www.amazon.in/dp/B0GT4N822M) ₹426)* | ₹426 – ₹499 | 🛒 |
-| **8Ω Speaker** | **Fastest:** [40mm 8Ω (`B07MTK843Z`)](https://www.amazon.in/dp/B07MTK843Z) / [8Ω Rectangular (`B0BN42GNFY`)](https://www.amazon.in/dp/B0BN42GNFY) *(or [8Ω 3W 2-Pack `B0HLH3VTNK`](https://www.amazon.in/dp/B0HLH3VTNK))* | ₹106 – ₹299 | 🛒 |
-| **ST7789 IPS Display** | **7-Pin Default:** [1.3-inch 240×240 RGB TFT IPS 7-Pin ST7789 (`B0G4F3XGYY`)](https://www.amazon.in/dp/B0G4F3XGYY) *(8-Pin Alt: [`B0HD7S7BBF`](https://www.amazon.in/dp/B0HD7S7BBF))* | ₹499 | 🛒 |
+| **Audio Modules Combo** | **Fastest:** [MAX98357A + INMP441 Combo (`B0H5X6RNPW`)](https://www.amazon.in/dp/B0H5X6RNPW) *(or [`B0GT4N822M`](https://www.amazon.in/dp/B0GT4N822M) ₹426)* | ₹426 – ₹499 | 📦 |
+| **8Ω Speaker** | **Ordered (2-Pack):** [Electrobot 48mm (2-Inch) 8 Ohm 3W Speakers (`B0HLH3VTNK`)](https://www.amazon.in/dp/B0HLH3VTNK) *(Alt: [40mm 8Ω `B07MTK843Z`](https://www.amazon.in/dp/B07MTK843Z))* | ₹106 – ₹299 | 📦 |
+| **ST7789 IPS Display** | **7-Pin Default:** [1.3-inch 240×240 RGB TFT IPS 7-Pin ST7789 (`B0G4F3XGYY`)](https://www.amazon.in/dp/B0G4F3XGYY) *(8-Pin Alt: [`B0HD7S7BBF`](https://www.amazon.in/dp/B0HD7S7BBF))* | ₹499 | 📦 |
 | **830-Pt Breadboard Kit** | [ApTechDeals 840-Point Breadboard + Jumper Wires](https://www.amazon.in/dp/B07PQS67BN) *(100% plug-and-play)* | ₹196 | ✅ |
-| **Passives, Button & Pins** | [1000uF Caps (`B09VL23ZP1`)](https://www.amazon.in/dp/B09VL23ZP1) + [6x6mm Buttons (`B0H3PVBZ7D`)](https://www.amazon.in/dp/B0H3PVBZ7D) + [40-Pin Male Headers (`B0BG7K3CGM`)](https://www.amazon.in/dp/B0BG7K3CGM) | ₹209 + ₹149 + ₹99 | 🛒 |
+| **Passives, Button & Pins** | [1000uF Caps (`B09VL23ZP1`)](https://www.amazon.in/dp/B09VL23ZP1) + [6x6mm Buttons (`B0H3PVBZ7D`)](https://www.amazon.in/dp/B0H3PVBZ7D) + [40-Pin Male Headers (`B0BG7K3CGM`)](https://www.amazon.in/dp/B0BG7K3CGM) | ₹209 + ₹149 + ₹99 | 📦 |
 | **Soldering Iron Kit** | **NONE NEEDED** *(Can return delivered kit for ₹242 refund)* | **₹0** | 🔄 |
-| **TOTAL** | **Estimated Hardware Component Cost (100% Solderless Path)** | **~₹2,483 INR** | — |
+| **TOTAL** | **Estimated Hardware Component Cost (100% Solderless Path)** | **~₹2,676 INR** | — |
 
 ---
 

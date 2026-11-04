@@ -13,7 +13,7 @@ os.environ["TTS_PROVIDER"] = "mock"
 import httpx
 import json
 from adapters import ChitLLM
-from app import app, lifespan, state
+from app import app, extract_action_tag, lifespan, state
 
 
 def make_test_16k_pcm(duration_sec: float = 1.0, freq_hz: float = 440.0) -> bytes:
@@ -209,6 +209,13 @@ async def run_tests() -> None:
             f"[PASS] ChitLLM contract -> 429 retry + strict schema + session_id "
             f"({chit.session_id[:8]}...) + sentence splitting verified"
         )
+
+    # 10. Test expression & gesture tag extraction + mid-sentence bracket stripping
+    assert extract_action_tag("[WAVE] Hello there!") == ("WAVE", "Hello there!")
+    assert extract_action_tag("Hi! [happy] So glad to meet you!") == ("HAPPY", "Hi! So glad to meet you!")
+    assert extract_action_tag("[SURPRISED] [wink] Wow, really?") == ("SURPRISED", "Wow, really?")
+    assert extract_action_tag("[sad] Oh no, I missed that.") == ("SAD", "Oh no, I missed that.")
+    print("[PASS] Expression tags ([WAVE], [HAPPY], [SURPRISED], [SAD]) + stray bracket stripping verified")
 
 
 if __name__ == "__main__":

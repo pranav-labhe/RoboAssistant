@@ -38,8 +38,18 @@ enum RobotState : uint8_t {
     STATE_ERROR
 };
 
-static volatile RobotState g_robotState       = STATE_BOOT;
-static volatile int32_t    g_speechBouncePx   = 0; // 0..18 px vertical bounce during speech
+enum RobotExpression : uint8_t {
+    EXPR_NEUTRAL = 0,
+    EXPR_WAVE,
+    EXPR_HAPPY,
+    EXPR_SURPRISED,
+    EXPR_SAD
+};
+
+static volatile RobotState      g_robotState       = STATE_BOOT;
+static volatile RobotExpression g_activeExpression = EXPR_NEUTRAL;
+static volatile int32_t         g_speechBouncePx   = 0; // 0..18 px vertical bounce during speech
+static volatile uint32_t        g_servoWaveStartMs = 0; // Non-blocking servo wave start timestamp (0 = idle)
 
 static constexpr i2s_port_t MIC_I2S_PORT       = I2S_NUM_0;
 static constexpr i2s_port_t AMP_I2S_PORT       = I2S_NUM_1;
@@ -198,15 +208,51 @@ static void renderFaceFrame(RobotState state, uint32_t nowMs) {
         }
         case STATE_SPEAKING: {
             int bounce = g_speechBouncePx;
-            int h = 60 + (bounce / 2);
+            RobotExpression expr = g_activeExpression;
             int y = eyeY - (bounce / 3);
-            g_faceSprite.fillRoundRect(leftX - eyeW / 2, y - h / 2, eyeW, h, 16, cyanColor);
-            g_faceSprite.fillRoundRect(rightX - eyeW / 2, y - h / 2, eyeW, h, 16, cyanColor);
 
-            // Animated mouth bar synced to voice energy
-            int mouthW = 44 + bounce * 2;
-            int mouthH = 6 + bounce;
-            g_faceSprite.fillRoundRect(120 - mouthW / 2, 114 - mouthH / 2, mouthW, mouthH, mouthH / 2, cyanColor);
+            if (expr == EXPR_WAVE || expr == EXPR_HAPPY) {
+                // Cheerful arched crescent eyes (^ ^) + smiling mouth (physical wave is driven on GPIO 18)
+                g_faceSprite.fillCircle(leftX, y, 28, cyanColor);
+                g_faceSprite.fillCircle(leftX, y + 16, 26, TFT_BLACK);
+                g_faceSprite.fillCircle(rightX, y, 28, cyanColor);
+                g_faceSprite.fillCircle(rightX, y + 16, 26, TFT_BLACK);
+
+                int smileR = 16 + (bounce / 2);
+                g_faceSprite.fillCircle(120, 108, smileR, cyanColor);
+                g_faceSprite.fillRect(120 - smileR - 2, 108 - smileR - 2, (smileR + 2) * 2, smileR - (bounce / 3), TFT_BLACK);
+            } else if (expr == EXPR_SURPRISED) {
+                // Wide circular surprised eyes + 'O' mouth synced to voice bounce
+                int rad = 28 + (bounce / 3);
+                g_faceSprite.fillCircle(leftX, y, rad, cyanColor);
+                g_faceSprite.fillCircle(leftX, y, 10, TFT_BLACK);
+                g_faceSprite.fillCircle(rightX, y, rad, cyanColor);
+                g_faceSprite.fillCircle(rightX, y, 10, TFT_BLACK);
+
+                int mouthR = 10 + (bounce / 2);
+                g_faceSprite.fillCircle(120, 114, mouthR, cyanColor);
+                g_faceSprite.fillCircle(120, 114, max(4, mouthR - 5), TFT_BLACK);
+            } else if (expr == EXPR_SAD) {
+                // Sympathetic droopy eyes with angled outer brows
+                int h = 50 + (bounce / 3);
+                g_faceSprite.fillRoundRect(leftX - eyeW / 2, y - h / 2, eyeW, h, 14, cyanColor);
+                g_faceSprite.fillRoundRect(rightX - eyeW / 2, y - h / 2, eyeW, h, 14, cyanColor);
+                g_faceSprite.fillTriangle(leftX - 30, y - 28, leftX + 30, y - 28, leftX - 30, y - 8, TFT_BLACK);
+                g_faceSprite.fillTriangle(rightX - 30, y - 28, rightX + 30, y - 28, rightX + 30, y - 8, TFT_BLACK);
+
+                int mouthW = 36 + bounce;
+                int mouthH = 5 + (bounce / 2);
+                g_faceSprite.fillRoundRect(120 - mouthW / 2, 116 - mouthH / 2, mouthW, mouthH, mouthH / 2, cyanColor);
+            } else {
+                // EXPR_NEUTRAL: Classic cyan rounded eyes + energy mouth bar
+                int h = 60 + (bounce / 2);
+                g_faceSprite.fillRoundRect(leftX - eyeW / 2, y - h / 2, eyeW, h, 16, cyanColor);
+                g_faceSprite.fillRoundRect(rightX - eyeW / 2, y - h / 2, eyeW, h, 16, cyanColor);
+
+                int mouthW = 44 + bounce * 2;
+                int mouthH = 6 + bounce;
+                g_faceSprite.fillRoundRect(120 - mouthW / 2, 114 - mouthH / 2, mouthW, mouthH, mouthH / 2, cyanColor);
+            }
             break;
         }
         case STATE_ERROR: {
@@ -221,6 +267,53 @@ static void renderFaceFrame(RobotState state, uint32_t nowMs) {
     g_faceSprite.pushSprite(0, FACE_BAND_Y);
 }
 
+// ============================================================================
+// Optional Servo Waving Arm Helper (Phase 5 Extra on GPIO 18, Non-Blocking)
+// ============================================================================
+
+static void triggerServoWaveIfEnabled() {
+    g_servoWaveStartMs = millis() | 1U;
+}
+
+static void updateServoWave(uint32_t nowMs) {
+#if ENABLE_SERVO_ARM
+    static bool s_servoAttached = false;
+    uint32_t startMs = g_servoWaveStartMs;
+    if (startMs == 0) {
+        if (s_servoAttached) {
+            ledcDetachPin(PIN_SERVO_PWM);
+            s_servoAttached = false;
+        }
+        return;
+    }
+
+    if (!s_servoAttached) {
+        ledcSetup(2, 50, 16);
+        ledcAttachPin(PIN_SERVO_PWM, 2);
+        s_servoAttached = true;
+    }
+
+    const uint32_t dutyMin = 3277; // ~1.0 ms (45 deg)
+    const uint32_t dutyMax = 6553; // ~2.0 ms (135 deg)
+    const uint32_t dutyMid = 4915; // ~1.5 ms (90 deg neutral)
+    uint32_t elapsed = nowMs - startMs;
+
+    if (elapsed < 720) {
+        uint32_t phase = (elapsed / 180) % 2;
+        ledcWrite(2, (phase == 0) ? dutyMin : dutyMax);
+    } else if (elapsed < 870) {
+        ledcWrite(2, dutyMid);
+    } else {
+        ledcDetachPin(PIN_SERVO_PWM);
+        s_servoAttached = false;
+        g_servoWaveStartMs = 0;
+    }
+#else
+    (void)nowMs;
+    g_servoWaveStartMs = 0;
+#endif
+}
+
 static void displayTask(void* param) {
     g_tft.init();
     g_tft.setRotation(0);
@@ -232,33 +325,11 @@ static void displayTask(void* param) {
     g_faceSprite.createSprite(FACE_BAND_W, FACE_BAND_H);
 
     while (true) {
-        renderFaceFrame(g_robotState, millis());
+        uint32_t nowMs = millis();
+        updateServoWave(nowMs);
+        renderFaceFrame(g_robotState, nowMs);
         vTaskDelay(pdMS_TO_TICKS(33)); // ~30 FPS non-blocking on Core 0 (yields to Wi-Fi)
     }
-}
-
-// ============================================================================
-// Optional Servo Waving Arm Helper (Phase 5 Extra on GPIO 18)
-// ============================================================================
-
-static void triggerServoWaveIfEnabled() {
-#if ENABLE_SERVO_ARM
-    // 50 Hz standard servo PWM on LEDC channel 2 (GPIO 18)
-    ledcSetup(2, 50, 16);
-    ledcAttachPin(PIN_SERVO_PWM, 2);
-    const uint32_t dutyMin = 3277; // ~1.0 ms (45 deg)
-    const uint32_t dutyMax = 6553; // ~2.0 ms (135 deg)
-    const uint32_t dutyMid = 4915; // ~1.5 ms (90 deg neutral)
-    for (int i = 0; i < 2; ++i) {
-        ledcWrite(2, dutyMin);
-        delay(180);
-        ledcWrite(2, dutyMax);
-        delay(180);
-    }
-    ledcWrite(2, dutyMid);
-    delay(150);
-    ledcDetachPin(PIN_SERVO_PWM);
-#endif
 }
 
 // ============================================================================
@@ -640,8 +711,21 @@ static void processGatewayTurn(size_t sampleCount) {
         ESP_ERROR_CHECK(i2s_set_clk(AMP_I2S_PORT, sampleRate,
                                     I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO));
 
-        if (http.hasHeader("X-Action") && http.header("X-Action") == "WAVE") {
-            triggerServoWaveIfEnabled();
+        g_activeExpression = EXPR_NEUTRAL;
+        if (http.hasHeader("X-Action")) {
+            String act = http.header("X-Action");
+            act.trim();
+            act.toUpperCase();
+            if (act == "WAVE") {
+                g_activeExpression = EXPR_WAVE;
+                triggerServoWaveIfEnabled();
+            } else if (act == "HAPPY") {
+                g_activeExpression = EXPR_HAPPY;
+            } else if (act == "SURPRISED") {
+                g_activeExpression = EXPR_SURPRISED;
+            } else if (act == "SAD") {
+                g_activeExpression = EXPR_SAD;
+            }
         }
 
         RobotVoiceI2SSink sink(g_prebufPsram, PREBUFFER_BYTES);
@@ -651,6 +735,7 @@ static void processGatewayTurn(size_t sampleCount) {
 
         Serial.printf("[Robot] Turn complete (%u PCM bytes played) | Free Heap: %u\n",
                       static_cast<unsigned>(sink.totalPlayedBytes()), ESP.getFreeHeap());
+        g_activeExpression = EXPR_NEUTRAL;
         g_robotState = STATE_IDLE;
     } else if (status == 204) {
         // Silence or empty transcript
