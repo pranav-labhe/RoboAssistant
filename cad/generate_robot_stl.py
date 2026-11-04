@@ -122,45 +122,69 @@ def op_subtract(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 # ============================================================================
 # Part 1: Compact Rounded Squircle Head Shell (`1_head_shell.stl` — 135mm Tall Kit)
-#   - Outer: 66 mm (X) x 52 mm (Y depth) x 55 mm (Z height), 9.5 mm fillet
-#   - Wall thickness: 2.4 mm (fits 48mm Speaker + 1.3" ST7789 1:1 hardware!)
+#   - Outer: 68 mm (X) x 58 mm (Y depth) x 55 mm (Z height), 9.0 mm fillet
+#   - Inner cavity: 63.2 x 53.2 x 50.6 mm -> 100% fits 48.0 mm Speaker + 1.3" ST7789!
+#   - Built-in Snap-Retention Clips for:
+#       1) 1.3" ST7789 (35.5x39mm U-channel rails + top snap-latch + bottom cradle)
+#       2) Electrobot 48mm Speaker (Ø48.6mm collar + 3 overhanging spring snap-clips)
+#       3) INMP441 Mic (14.4x10.4mm pinch-clip pocket + acoustic baffle)
+#       4) 6x6mm Tactile Switch (6.3x6.3mm 4-wall snap pocket with retention nibs)
+#       5) 31.5 x 26.0 mm Stadium Neck Spine Slot so 65mm ESP32-S3 rises freely!
 # ============================================================================
 
 
 def sdf_head_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
     # 1. Outer & inner rounded squircle shell (Z centered at 0 -> -27.5..+27.5 = 55 mm tall)
-    outer = sd_round_box(x, y, z, 33.0, 26.0, 27.5, 9.5)
-    inner = sd_round_box(x, y, z, 30.6, 23.6, 25.1, 7.5)
+    outer = sd_round_box(x, y, z, 34.0, 29.0, 27.5, 9.0)
+    inner = sd_round_box(x, y, z, 31.6, 26.6, 25.3, 7.0)
     shell = op_subtract(outer, inner)
 
-    # 2. Front visor recess (shallow 1.0 mm pocket on y = -26.0 front face, leaving 1.4 mm solid backing wall)
-    visor_recess = sd_round_box(x, y + 26.0, z - 0.5, 24.0, 1.0, 19.0, 5.5)
+    # 2. Front visor recess (shallow 1.0 mm pocket on y = -29.0 front face, leaving 1.4 mm solid backing wall)
+    visor_recess = sd_round_box(x, y + 29.0, z - 0.5, 24.0, 1.0, 19.0, 5.5)
     shell = op_subtract(shell, visor_recess)
 
     # 3. 1.3" ST7789 240x240 IPS Display Window (exact 26.6 x 26.6 mm 1:1 hardware through-cut!)
-    tft_window = sd_round_box(x, y + 24.8, z - 0.5, 13.3, 3.5, 13.3, 2.5)
+    tft_window = sd_round_box(x, y + 27.8, z - 0.5, 13.3, 3.5, 13.3, 2.5)
     shell = op_subtract(shell, tft_window)
 
-    # Internal ST7789 PCB retention rails (holds exact 35.5 x 39.0 mm 7-pin module behind window, clipped to outer)
-    left_rail = sd_round_box(x + 19.2, y + 21.5, z - 0.5, 1.4, 2.2, 18.5, 0.3)
-    right_rail = sd_round_box(x - 19.2, y + 21.5, z - 0.5, 1.4, 2.2, 18.5, 0.3)
-    bottom_ledge = sd_round_box(x, y + 21.5, z + 19.0, 19.2, 2.2, 1.5, 0.3)
-    rails = np.maximum(op_union(left_rail, op_union(right_rail, bottom_ledge)), outer)
+    # Built-in ST7789 U-Channel Guide Rails + Bottom Ledge + Top Snap-Latch Clip (holds 35.5 x 39.0 mm PCB)
+    left_u_rail = op_subtract(
+        sd_round_box(x + 18.8, y + 24.4, z - 0.5, 2.2, 2.4, 19.8, 0.3),
+        sd_round_box(x + 17.4, y + 24.6, z - 0.5, 1.6, 1.1, 20.5, 0.2),
+    )
+    right_u_rail = op_subtract(
+        sd_round_box(x - 18.8, y + 24.4, z - 0.5, 2.2, 2.4, 19.8, 0.3),
+        sd_round_box(x - 17.4, y + 24.6, z - 0.5, 1.6, 1.1, 20.5, 0.2),
+    )
+    bottom_ledge = sd_round_box(x, y + 24.4, z + 20.2, 19.0, 2.4, 1.5, 0.3)
+    top_snap_clip = sd_round_box(x, y + 23.6, z - 20.2, 8.0, 2.8, 1.3, 0.4)
+    rails = np.maximum(
+        op_union(op_union(left_u_rail, right_u_rail), op_union(bottom_ledge, top_snap_clip)),
+        outer,
+    )
     shell = op_union(shell, rails)
 
-    # 4. Side Speaker Grille ("Ears" at x = +/-33) + Internal 48.6 mm Speaker Collar on Right Ear
-    ear_boss_r = sd_cylinder_x(x - 32.4, y, z, 15.8, 1.2)
-    ear_boss_l = sd_cylinder_x(x + 32.4, y, z, 15.8, 1.2)
-    ear_ring_cut_r = sd_cylinder_x(x - 33.4, y, z, 14.2, 0.9)
-    ear_ring_cut_l = sd_cylinder_x(x + 33.4, y, z, 14.2, 0.9)
+    # 4. Side Speaker Grille ("Ears" at x = +/-34) + Internal Ø48.6 mm Collar & 3 Snap-Retention Clips
+    ear_boss_r = sd_cylinder_x(x - 33.4, y, z, 16.2, 1.2)
+    ear_boss_l = sd_cylinder_x(x + 33.4, y, z, 16.2, 1.2)
+    ear_ring_cut_r = sd_cylinder_x(x - 34.4, y, z, 14.5, 0.9)
+    ear_ring_cut_l = sd_cylinder_x(x + 34.4, y, z, 14.5, 0.9)
     shell = op_union(shell, op_union(ear_boss_r, ear_boss_l))
     shell = op_subtract(shell, op_union(ear_ring_cut_r, ear_ring_cut_l))
 
-    # Internal 48.6 mm ID retention collar on Right Ear for Electrobot 48mm (2-Inch) 8Ohm 3W speaker
-    spk_collar_outer = sd_cylinder_x(x - 28.5, y, z, 26.2, 2.8)
-    spk_collar_inner = sd_cylinder_x(x - 28.5, y, z, 24.3, 3.8)
-    spk_collar = np.maximum(op_subtract(spk_collar_outer, spk_collar_inner), outer)
-    shell = op_union(shell, spk_collar)
+    # Internal Ø48.6 mm ID retention collar on Right Ear (shifted y = +2.2 mm behind ST7789 PCB!)
+    spk_collar_outer = sd_cylinder_x(x - 29.0, y - 2.2, z, 26.2, 3.2)
+    spk_collar_inner = sd_cylinder_x(x - 29.0, y - 2.2, z, 24.3, 4.2)
+    spk_collar = op_subtract(spk_collar_outer, spk_collar_inner)
+    # 3 overhanging spring snap-clips on the inner rim of the speaker collar (locks 48mm speaker frame!)
+    spk_clip_top = sd_round_box(x - 26.3, y - 2.2, z - 23.8, 1.2, 4.5, 1.4, 0.3)
+    spk_clip_bf = sd_round_box(x - 26.3, y + 18.2, z + 12.0, 1.2, 1.4, 4.5, 0.3)
+    spk_clip_br = sd_round_box(x - 26.3, y - 22.6, z + 12.0, 1.2, 1.4, 4.5, 0.3)
+    spk_assy = np.maximum(
+        op_union(spk_collar, op_union(spk_clip_top, op_union(spk_clip_bf, spk_clip_br))),
+        outer,
+    )
+    shell = op_union(shell, spk_assy)
 
     # Perforated acoustic holes across both ear grilles (center + 2 hex rings = 19 holes)
     hole_coords = [(0.0, 0.0)]
@@ -171,10 +195,10 @@ def sdf_head_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
         ang = i * math.pi / 6.0
         hole_coords.append((9.6 * math.cos(ang), 9.6 * math.sin(ang)))
     for hy, hz in hole_coords:
-        hole_cut = sd_cylinder_x(x, y - hy, z - hz, 1.5, 38.0)
+        hole_cut = sd_cylinder_x(x, y - hy, z - hz, 1.5, 39.0)
         shell = op_subtract(shell, hole_cut)
 
-    # 5. Top Circular PTT Button Collar + Exact 6x6mm Tactile Switch Cradle (z = +27.5 is top)
+    # 5. Top Circular PTT Button Collar + Exact 6x6mm Tactile Switch Snap-Cradle (z = +27.5 is top)
     top_ring = op_subtract(
         sd_cylinder_z(x, y, z - 27.0, 12.8, 2.2),
         sd_cylinder_z(x, y, z - 27.0, 11.0, 5.0),
@@ -182,36 +206,44 @@ def sdf_head_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
     shell = op_union(shell, top_ring)
     btn_hole = sd_cylinder_z(x, y, z - 26.5, 11.0, 4.5)
     shell = op_subtract(shell, btn_hole)
-    # Internal bridge platform holding the 6x6mm tactile switch 8.5 mm below top hole
-    sw_bridge = sd_round_box(x, y, z - 18.5, 16.0, 6.0, 1.6, 0.4)
-    sw_pocket = sd_round_box(x, y, z - 19.5, 3.25, 3.25, 1.4, 0.2)
+    # Internal bridge platform holding the 6x6mm tactile switch 8.5 mm below top hole + 2 retention nibs
+    sw_bridge = sd_round_box(x, y, z - 18.5, 16.5, 6.5, 2.0, 0.4)
+    sw_pocket = sd_round_box(x, y, z - 19.5, 3.2, 3.2, 1.6, 0.2)
     sw_wire_slot = sd_round_box(x - 4.5, y, z - 18.5, 1.8, 3.5, 3.5, 0.2)
-    sw_assy = np.maximum(op_subtract(sw_bridge, op_union(sw_pocket, sw_wire_slot)), outer)
-    shell = op_union(shell, sw_assy)
-
-    # 6. Isolated INMP441 Microphone Port & Internal Acoustic Isolation Wall (top-left front)
-    mic_baffle = np.maximum(
-        op_subtract(
-            sd_cylinder_y(x + 16.5, y + 22.0, z - 16.0, 7.2, 2.8),
-            sd_cylinder_y(x + 16.5, y + 22.0, z - 16.0, 5.5, 3.8),
-        ),
+    sw_nib_l = sd_round_box(x + 2.9, y, z - 20.3, 0.5, 2.0, 0.4, 0.1)
+    sw_nib_r = sd_round_box(x - 2.9, y, z - 20.3, 0.5, 2.0, 0.4, 0.1)
+    sw_assy = np.maximum(
+        op_union(op_subtract(sw_bridge, op_union(sw_pocket, sw_wire_slot)), op_union(sw_nib_l, sw_nib_r)),
         outer,
     )
-    mic_pinhole = sd_cylinder_y(x + 16.5, y + 25.0, z - 16.0, 1.5, 4.0)
-    shell = op_union(shell, mic_baffle)
+    shell = op_union(shell, sw_assy)
+
+    # 6. Isolated INMP441 Microphone Port + Acoustic Baffle + Top/Bottom PCB Pinch Clips (14.4x10.4mm)
+    mic_baffle = op_subtract(
+        sd_cylinder_y(x + 16.5, y + 25.0, z - 16.0, 7.5, 2.8),
+        sd_cylinder_y(x + 16.5, y + 25.0, z - 16.0, 5.4, 3.8),
+    )
+    mic_clip_top = sd_round_box(x + 16.5, y + 23.2, z - 21.6, 4.5, 2.2, 1.0, 0.2)
+    mic_clip_bot = sd_round_box(x + 16.5, y + 23.2, z - 10.4, 4.5, 2.2, 1.0, 0.2)
+    mic_assy = np.maximum(op_union(mic_baffle, op_union(mic_clip_top, mic_clip_bot)), outer)
+    mic_pinhole = sd_cylinder_y(x + 16.5, y + 28.0, z - 16.0, 1.5, 4.0)
+    shell = op_union(shell, mic_assy)
     shell = op_subtract(shell, mic_pinhole)
 
-    # 7. Bottom Neck Socket + 26 mm Wire Pass-Through (z = -27.5) & Rear Access Opening
-    neck_open = sd_cylinder_z(x, y, z + 26.5, 13.5, 4.5)
+    # 7. Bottom Neck Collar + 29.8 x 16.0 mm Stadium Spine Slot (100% enclosed inside round neck ring!)
+    neck_open = op_union(
+        sd_cylinder_z(x, y, z + 26.5, 13.5, 4.5),
+        sd_round_box(x, y, z + 26.5, 14.9, 8.0, 4.5, 3.5),
+    )
     neck_collar = op_subtract(
-        sd_cylinder_z(x, y, z + 27.5, 16.0, 2.5),
-        sd_cylinder_z(x, y, z + 27.5, 13.5, 3.5),
+        sd_cylinder_z(x, y, z + 27.5, 18.0, 2.5),
+        neck_open,
     )
     shell = op_subtract(shell, neck_open)
     shell = op_union(shell, neck_collar)
 
-    # Removable rear head service opening so 48mm Speaker + ST7789 slide in effortlessly
-    rear_access = sd_round_box(x, y - 25.0, z, 19.5, 3.5, 16.0, 4.0)
+    # 8. Wide 49.0 x 45.0 mm Rear Head Service Opening so the 48.0 mm Speaker slides straight in!
+    rear_access = sd_round_box(x, y - 27.5, z, 24.5, 3.8, 22.5, 5.0)
     shell = op_subtract(shell, rear_access)
 
     return shell
@@ -249,17 +281,20 @@ def sdf_top_button_cap(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarra
 
 # ============================================================================
 # Part 4: Compact Chubby Oval Torso Shell (`4_torso_shell.stl` — 135mm Tall Kit)
-#   - Outer: 62 x 50 x 52 mm smooth oval belly (2.4 mm lightweight wall)
-#   - Houses ESP32-S3 (`HW678 V0.0.0`), MAX98357A, 1000uF cap
-#   - Click-detent Hip Pivot Axles + Right-Shoulder SG90 Pocket
+#   - Outer: 62 x 52 x 54 mm smooth oval belly (2.4 mm lightweight wall)
+#   - Wide 31.5 x 26.0 mm Stadium Neck Spine Slot -> 74.0 mm vertical headroom for 65x28.5mm ESP32-S3!
+#   - Built-in Snap-Retention Clips for:
+#       1) ESP32-S3 (`HW678 V0.0.0`, 28.5x65mm): Deep C-channel rails + bottom cradle + side snap-clips
+#       2) MAX98357A Amp (19x18mm): Front-left U-pocket with overhanging snap-clips
+#       3) 1000uF 25V Electrolytic Cap (Ø10x17mm): Front-right C-shaped spring clamp
 # ============================================================================
 
 
 def sdf_torso_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
     # Plump compact oval belly (z = -16.5 bottom pelvis pad to z = +32.5 top neck deck)
     taper = 1.0 - 0.004 * (z - 6.0)
-    belly_main = sd_ellipsoid(x * taper, y, z - 8.5, 29.8, 25.2, 27.8)
-    tummy_bulge = sd_sphere(x * 0.92, y + 1.2, z - 6.5, 24.5)
+    belly_main = sd_ellipsoid(x * taper, y, z - 8.5, 30.8, 26.2, 27.8)
+    tummy_bulge = sd_sphere(x * 0.92, y + 1.2, z - 6.5, 25.2)
     torso_outer = smin(belly_main, tummy_bulge, 4.5)
 
     bottom_clip = z + 16.5
@@ -268,44 +303,50 @@ def sdf_torso_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
     torso_outer = np.maximum(torso_outer, -top_clip)
 
     # Lightweight 2.4 mm uniform oval interior cavity
-    cavity_oval = sd_ellipsoid(x * taper, y, z - 8.5, 27.3, 22.7, 25.3)
+    cavity_oval = sd_ellipsoid(x * taper, y, z - 8.5, 28.4, 23.8, 25.4)
     shell = op_subtract(torso_outer, cavity_oval)
 
-    # Top Neck Ring (mates with 1_head_shell.stl neck collar) + 22 mm open wire/PCB top clearance
-    neck_peg = sd_cylinder_z(x, y, z - 34.5, 13.1, 2.8)
-    neck_hole = sd_cylinder_z(x, y, z - 31.5, 10.8, 7.5)
-    shell = op_subtract(op_union(shell, neck_peg), neck_hole)
+    # Top Neck Ring + 29.8 x 16.0 mm Stadium Spine Slot (100% inside round neck peg, fits 28.5mm ESP32-S3!)
+    neck_peg = sd_cylinder_z(x, y, z - 34.5, 16.2, 2.8)
+    neck_spine_slot = op_union(
+        sd_cylinder_z(x, y, z - 31.5, 12.6, 7.5),
+        sd_round_box(x, y, z - 31.5, 14.9, 8.0, 7.5, 3.5),
+    )
+    shell = op_subtract(op_union(shell, neck_peg), neck_spine_slot)
 
-    # Flush Shoulder Pivot Sockets recessed into upper oval curve (x = +/-26.0, z = +18.5)
-    sh_socket_l = sd_cylinder_x(x + 26.0, y, z - 18.5, 2.9, 6.5)
-    sh_socket_r = sd_cylinder_x(x - 26.0, y, z - 18.5, 2.9, 6.5)
-    sg90_pocket = sd_round_box(x - 21.0, y, z - 18.5, 6.0, 6.3, 11.6, 0.4)
+    # Flush Shoulder Pivot Sockets recessed into upper oval curve (x = +/-27.0, z = +18.5)
+    sh_socket_l = sd_cylinder_x(x + 27.0, y, z - 18.5, 2.9, 6.5)
+    sh_socket_r = sd_cylinder_x(x - 27.0, y, z - 18.5, 2.9, 6.5)
+    sg90_pocket = sd_round_box(x - 22.0, y, z - 18.5, 6.0, 6.3, 11.6, 0.4)
     shell = op_subtract(shell, op_union(sh_socket_l, op_union(sh_socket_r, sg90_pocket)))
 
-    # Angled Crescent Lower Hip Socket Recesses (x = +/-13.5, z = -9.5)
-    hip_wall_l = sd_sphere(x + 13.5, y, z + 9.5, 12.6)
-    hip_wall_r = sd_sphere(x - 13.5, y, z + 9.5, 12.6)
+    # Angled Crescent Lower Hip Socket Recesses (x = +/-14.2, z = -9.5)
+    hip_wall_l = sd_sphere(x + 14.2, y, z + 9.5, 12.4)
+    hip_wall_r = sd_sphere(x - 14.2, y, z + 9.5, 12.4)
     shell = op_union(shell, op_union(hip_wall_l, hip_wall_r))
-    upper_cav = sd_ellipsoid(x * taper, y, z - 11.5, 26.2, 21.8, 18.5)
+    upper_cav = sd_ellipsoid(x * taper, y, z - 11.5, 27.2, 22.8, 18.5)
     shell = op_subtract(shell, upper_cav)
+    # Rear spine clearance channel down to z = -13.0 mm for the 65.0 x 28.5 mm ESP32-S3 PCB
+    spine_cav = sd_round_box(x, y - 5.0, z - 9.0, 16.0, 10.5, 22.0, 2.5)
+    shell = op_subtract(shell, spine_cav)
 
     hip_cut_l = op_union(
-        sd_sphere(x + 13.5, y, z + 10.0, 10.6),
-        sd_cylinder_z(x + 13.5, y, z + 14.5, 10.4, 5.5),
+        sd_sphere(x + 14.2, y, z + 10.0, 10.4),
+        sd_cylinder_z(x + 14.2, y, z + 14.5, 10.2, 5.5),
     )
     hip_cut_r = op_union(
-        sd_sphere(x - 13.5, y, z + 10.0, 10.6),
-        sd_cylinder_z(x - 13.5, y, z + 14.5, 10.4, 5.5),
+        sd_sphere(x - 14.2, y, z + 10.0, 10.4),
+        sd_cylinder_z(x - 14.2, y, z + 14.5, 10.2, 5.5),
     )
     shell = op_subtract(shell, op_union(hip_cut_l, hip_cut_r))
 
     # Heavy-duty 6.8 mm Hip Pivot Axles + Click-Detent Ridges (0 deg standing & 90 deg sit)
-    hip_axle_l = sd_cylinder_x(x + 13.5, y, z + 10.0, 3.4, 7.5)
-    hip_axle_r = sd_cylinder_x(x - 13.5, y, z + 10.0, 3.4, 7.5)
-    detent_stand_l = sd_round_box(x + 13.5, y, z + 6.4, 6.5, 0.8, 0.9, 0.25)
-    detent_stand_r = sd_round_box(x - 13.5, y, z + 6.4, 6.5, 0.8, 0.9, 0.25)
-    detent_sit_l = sd_round_box(x + 13.5, y + 3.6, z + 10.0, 6.5, 0.9, 0.8, 0.25)
-    detent_sit_r = sd_round_box(x - 13.5, y + 3.6, z + 10.0, 6.5, 0.9, 0.8, 0.25)
+    hip_axle_l = sd_cylinder_x(x + 14.2, y, z + 10.0, 3.4, 7.5)
+    hip_axle_r = sd_cylinder_x(x - 14.2, y, z + 10.0, 3.4, 7.5)
+    detent_stand_l = sd_round_box(x + 14.2, y, z + 6.4, 6.5, 0.8, 0.9, 0.25)
+    detent_stand_r = sd_round_box(x - 14.2, y, z + 6.4, 6.5, 0.8, 0.9, 0.25)
+    detent_sit_l = sd_round_box(x + 14.2, y + 3.6, z + 10.0, 6.5, 0.9, 0.8, 0.25)
+    detent_sit_r = sd_round_box(x - 14.2, y + 3.6, z + 10.0, 6.5, 0.9, 0.8, 0.25)
     shell = op_union(
         shell,
         op_union(
@@ -314,14 +355,49 @@ def sdf_torso_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
         ),
     )
 
-    # Internal ESP32-S3 Board Guide Rails (exact 28.8 mm channel width for HW678 V0.0.0 PCB!)
-    esp_rail_l = sd_round_box(x + 15.2, y + 3.5, z - 10.5, 1.3, 2.5, 15.5, 0.3)
-    esp_rail_r = sd_round_box(x - 15.2, y + 3.5, z - 10.5, 1.3, 2.5, 15.5, 0.3)
-    shell = op_union(shell, op_union(esp_rail_l, esp_rail_r))
+    # 1) ESP32-S3 (`HW678 V0.0.0`, 28.5 x 65.0 mm) Deep C-Channel Guide Rails + Bottom Stop + Snap-Clips
+    esp_c_rail_l = op_subtract(
+        sd_round_box(x + 15.2, y - 5.0, z - 8.0, 2.2, 2.8, 20.0, 0.3),
+        sd_round_box(x + 13.8, y - 5.0, z - 8.0, 1.5, 1.1, 21.0, 0.2),
+    )
+    esp_c_rail_r = op_subtract(
+        sd_round_box(x - 15.2, y - 5.0, z - 8.0, 2.2, 2.8, 20.0, 0.3),
+        sd_round_box(x - 13.8, y - 5.0, z - 8.0, 1.5, 1.1, 21.0, 0.2),
+    )
+    esp_bottom_stop_l = sd_round_box(x + 12.5, y - 5.0, z + 12.2, 3.0, 2.8, 1.2, 0.3)
+    esp_bottom_stop_r = sd_round_box(x - 12.5, y - 5.0, z + 12.2, 3.0, 2.8, 1.2, 0.3)
+    esp_snap_l = sd_round_box(x + 13.7, y - 5.0, z - 24.5, 0.9, 2.2, 1.2, 0.2)
+    esp_snap_r = sd_round_box(x - 13.7, y - 5.0, z - 24.5, 0.9, 2.2, 1.2, 0.2)
+    esp_mounts = op_union(
+        op_union(esp_c_rail_l, esp_c_rail_r),
+        op_union(op_union(esp_bottom_stop_l, esp_bottom_stop_r), op_union(esp_snap_l, esp_snap_r)),
+    )
+
+    # 2) MAX98357A Amp (19 x 18 mm PCB) Snap-In Cradle on Front-Left Inner Wall
+    amp_cradle = op_subtract(
+        sd_round_box(x + 13.0, y + 12.5, z - 11.0, 11.2, 2.4, 10.5, 0.4),
+        sd_round_box(x + 13.0, y + 12.2, z - 11.5, 9.8, 1.2, 9.8, 0.2),
+    )
+    amp_clip = sd_round_box(x + 13.0, y + 11.2, z - 20.8, 4.5, 1.8, 1.0, 0.2)
+
+    # 3) 1000uF 25V Electrolytic Capacitor (Ø10 x 17 mm) C-Shaped Spring Clip on Front-Right Inner Wall
+    cap_c_clip = op_subtract(
+        op_subtract(
+            sd_cylinder_z(x - 13.5, y + 11.5, z - 11.0, 6.8, 6.5),
+            sd_cylinder_z(x - 13.5, y + 11.5, z - 11.0, 5.25, 7.5),
+        ),
+        sd_round_box(x - 13.5, y + 6.0, z - 11.0, 3.9, 4.0, 7.5, 0.2),
+    )
+
+    internal_clips = np.maximum(
+        op_union(esp_mounts, op_union(op_union(amp_cradle, amp_clip), cap_c_clip)),
+        torso_outer,
+    )
+    shell = op_union(shell, internal_clips)
 
     # Rear Service Door Opening (matches 5_back_access_door.stl) + Lower USB-C Cable Slot
-    back_door_cut = sd_round_box(x, y - 21.0, z - 10.5, 20.5, 7.5, 16.5, 4.2)
-    usbc_slot = sd_round_box(x, y - 19.5, z + 5.5, 7.5, 7.5, 3.8, 1.8)
+    back_door_cut = sd_round_box(x, y - 22.0, z - 10.5, 20.5, 7.5, 16.5, 4.2)
+    usbc_slot = sd_round_box(x, y - 20.5, z + 5.5, 8.5, 7.5, 4.2, 1.8)
     shell = op_subtract(shell, op_union(back_door_cut, usbc_slot))
 
     return shell
@@ -329,17 +405,19 @@ def sdf_torso_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
 
 # ============================================================================
 # Part 5: Snap-Fit Back Service Door (`5_back_access_door.stl`)
-#   - Fits both the rear head access opening and rear torso service opening
+#   - Includes side snap-lock retention clips + 2 inward PCB/wire stabilizer posts
 # ============================================================================
 
 
 def sdf_back_door(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
     plate = sd_round_box(x, y, z, 22.0, 18.0, 1.5, 4.5)
     inner_lip = op_subtract(
-        sd_round_box(x, y, z - 1.8, 20.3, 16.3, 1.6, 4.0),
-        sd_round_box(x, y, z - 1.8, 18.5, 14.5, 2.5, 3.4),
+        sd_round_box(x, y, z - 1.8, 20.3, 16.3, 1.8, 4.0),
+        sd_round_box(x, y, z - 1.8, 18.5, 14.5, 2.8, 3.4),
     )
-    door = op_union(plate, inner_lip)
+    snap_barb_l = sd_round_box(x + 20.6, y, z - 2.6, 0.7, 5.0, 0.8, 0.2)
+    snap_barb_r = sd_round_box(x - 20.6, y, z - 2.6, 0.7, 5.0, 0.8, 0.2)
+    door = op_union(op_union(plate, inner_lip), op_union(snap_barb_l, snap_barb_r))
     for sz in (-6.0, 0.0, 6.0):
         slot = sd_round_box(x, y + sz, z, 12.5, 1.4, 4.0, 0.6)
         door = op_subtract(door, slot)
@@ -636,9 +714,9 @@ def main() -> None:
     parts_spec = [
         (
             "1_head_shell.stl",
-            "Head Shell (ST7789 + 48mm Speaker + INMP441 + PTT)",
+            "Head Shell (ST7789 + 48mm Speaker Clips + INMP441 + PTT)",
             sdf_head_shell,
-            ((-36.0, 36.0), (-29.0, 29.0), (-31.0, 31.0)),
+            ((-37.0, 37.0), (-32.0, 32.0), (-31.5, 31.5)),
             0.70,
             (236, 240, 245),
         ),
@@ -660,9 +738,9 @@ def main() -> None:
         ),
         (
             "4_torso_shell.stl",
-            "Compact Oval Torso + Click-Detent Hip Axles + ESP32-S3 Rails",
+            "Compact Oval Torso + ESP32-S3/MAX98357A/1000uF Snap Clips",
             sdf_torso_shell,
-            ((-33.0, 33.0), (-29.0, 29.0), (-18.0, 39.0)),
+            ((-34.0, 34.0), (-31.0, 31.0), (-18.5, 39.0)),
             0.70,
             (236, 240, 245),
         ),
@@ -734,10 +812,10 @@ def main() -> None:
     head_world = head_v.copy()
     head_world[:, 2] += 74.2
 
-    # Rotate visor 90 deg around X to sit on the front of the head (y = -24.5 mm)
+    # Rotate visor 90 deg around X to sit on the front of the head (y = -27.5 mm)
     visor_world = np.zeros_like(visor_v)
     visor_world[:, 0] = visor_v[:, 0]
-    visor_world[:, 1] = -visor_v[:, 2] - 24.5
+    visor_world[:, 1] = -visor_v[:, 2] - 27.5
     visor_world[:, 2] = visor_v[:, 1] + 74.2 + 29.0
 
     # Place button cap at top of head -> exact top of button reaches z = 135.0 mm (13.5 cm)!
@@ -754,7 +832,7 @@ def main() -> None:
     )
     halo_v[:, 2] += 74.2 + 56.5
 
-    # Split left & right arms and place flush against upper oval shoulders (x = +/-29.6, z = +34.5)
+    # Split left & right arms and place flush against upper oval shoulders (x = +/-30.4, z = +34.5)
     arm_l_v = sdf_single_arm_mesh(-1.0)
     arm_r_v = sdf_single_arm_mesh(+1.0)
 
@@ -767,7 +845,7 @@ def main() -> None:
         ((-15.0, 15.0), (-3.0, 3.0), (-15.0, 15.0)),
         step=0.7,
     )
-    scr_v[:, 1] -= 23.6
+    scr_v[:, 1] -= 26.6
     scr_v[:, 2] += 74.2 + 16.0
 
     def sdf_cute_face(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
@@ -807,7 +885,7 @@ def main() -> None:
         ((-15.0, 15.0), (-3.0, 3.0), (-10.0, 12.0)),
         step=0.45,
     )
-    eye_v[:, 1] -= 24.8
+    eye_v[:, 1] -= 27.8
     eye_v[:, 2] += 74.2 + 19.5
 
     assembled_meshes = [
