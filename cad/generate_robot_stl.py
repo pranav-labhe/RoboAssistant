@@ -1,19 +1,21 @@
 """
 ESP32-S3 Tabletop Voice Robot — Parametric 3D Printable CAD (.STL) Generator
 ============================================================================
-Generates 6 watertight, manifold binary .STL files matching `docs/images/robot_hero.jpg`
+Generates 8 watertight, manifold binary .STL files matching `docs/images/robot_hero.jpg`
 and custom-fitted to the exact hardware dimensions ordered in `README.md`:
 
-  1. 1_head_shell.stl          (84 x 70 x 72 mm)  - Rounded squircle head, 48mm speaker ear grille,
-                                                    INMP441 acoustic isolation collar, PTT button socket
-  2. 2_front_visor_bezel.stl   (63 x 51 x 4.5 mm) - Snap-in black visor framing 1.3" ST7789 240x240 IPS
-  3. 3_top_ptt_button_cap.stl  (28 x 28 x 8.5 mm) - Top circular plunger cap for 6x6mm GPIO 1 button
-  4. 4_torso_and_feet.stl      (82 x 74 x 108 mm) - Chubby rounded torso + standing feet + ESP32-S3 rails
-                                                    + SG90 right-shoulder servo socket + USB-C port
-  5. 5_back_access_door.stl    (56 x 52 x 5.0 mm) - Snap-fit rear service door with cooling slots
-  6. 6_arms_left_and_right.stl (76 x 32 x 68 mm)  - Articulated left & right arms with C-hands
+  1. 1_head_shell.stl            (86 x 68 x 78 mm) - Rounded squircle head, 48mm speaker ear grille,
+                                                     INMP441 acoustic isolation collar, PTT button socket
+  2. 2_front_visor_bezel.stl     (59 x 47 x 6 mm)  - Snap-in black visor framing 1.3" ST7789 240x240 IPS
+  3. 3_top_ptt_button_cap.stl    (30 x 30 x 10 mm) - Top circular plunger cap for 6x6mm GPIO 1 button
+  4. 4_torso_shell.stl           (78 x 64 x 72 mm) - Chubby rounded torso + ESP32-S3 rails + SG90 arm &
+                                                     dual-mode hip servo bays + click-detent hip axles
+  5. 5_back_access_door.stl      (52 x 44 x 6 mm)  - Snap-fit rear service door with cooling slots
+  6. 6_arms_left_and_right.stl   (68 x 20 x 59 mm) - Articulated left & right arms with C-hands
+  7. 7_thighs_left_and_right.stl (66 x 27 x 36 mm) - Movable hip-pivot thighs with 0/25/90 deg click-detents
+  8. 8_feet_left_and_right.stl   (68 x 40 x 18 mm) - Swivel/tilt ankle shoes with flat-standing lock detents
 
-Also renders `cad/robot_cad_preview.png` so you can inspect all 6 meshes visually.
+Also renders `cad/robot_cad_preview.png` so you can inspect all 8 meshes visually.
 Run:
     python cad/generate_robot_stl.py
 """
@@ -245,47 +247,37 @@ def sdf_top_button_cap(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarra
 
 
 # ============================================================================
-# Part 4: Chubby Rounded Torso + Standing Feet (`4_torso_and_feet.stl`)
+# Part 4: Chubby Rounded Torso Shell (`4_torso_shell.stl`)
 #   - Houses ESP32-S3 (`HW678 V0.0.0`), MAX98357A, 1000uF cap, and 18650 slot
 #   - Right shoulder SG90 micro-servo pocket + Left/Right 6mm arm pivot sockets
+#   - Dual-mode Hip Pivot Sockets (0/25/90 deg click-detent axles + SG90 hip servo bays)
 #   - Rear service hatch cutout + bottom-rear USB-C cable slot
 # ============================================================================
 
 
-def sdf_torso_and_feet(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    # Torso centered at z = +14, legs/feet extending down to z = -52 (flat bottom)
+def sdf_torso_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
+    # Torso centered at z = +14, rounded lower pelvis down to z = -22
     belly = sd_ellipsoid(x, y, z - 14.0, 38.0, 33.0, 36.0)
     chest_flat = sd_round_box(x, y, z - 16.0, 36.0, 31.0, 32.0, 14.0)
     torso_outer = smin(belly, chest_flat, 5.0)
 
-    # Left & Right Legs (x = -17, +17)
-    leg_l = sd_cylinder_z(x + 17.5, y, z + 28.0, 12.5, 18.0)
-    leg_r = sd_cylinder_z(x - 17.5, y, z + 28.0, 12.5, 18.0)
-
-    # Pill-shaped Standing Feet (flat bottom at z = -52)
-    foot_l = sd_round_box(x + 17.5, y + 3.5, z + 45.0, 14.5, 19.5, 7.0, 5.5)
-    foot_r = sd_round_box(x - 17.5, y + 3.5, z + 45.0, 14.5, 19.5, 7.0, 5.5)
-
-    body_outer = smin(torso_outer, op_union(leg_l, leg_r), 6.0)
-    body_outer = smin(body_outer, op_union(foot_l, foot_r), 4.0)
-
-    # Flatten exact bottom sole at z = -52.0 for rock-solid bed adhesion & standing stability
-    bottom_clip = z + 52.0
-    body_outer = np.maximum(body_outer, -bottom_clip)
+    # Flatten bottom central pelvis pad at z = -20.5 for print bed stability without supports
+    bottom_clip = z + 20.5
+    torso_outer = np.maximum(torso_outer, -bottom_clip)
     # Flatten top neck deck at z = +44.0
     top_clip = -(z - 44.0)
-    body_outer = np.maximum(body_outer, -top_clip)
+    torso_outer = np.maximum(torso_outer, -top_clip)
 
     # Hollow interior cavity for ESP32-S3, MAX98357A, 1000uF cap & battery
-    cavity = sd_round_box(x, y, z - 13.0, 31.0, 26.5, 27.5, 9.0)
-    shell = op_subtract(body_outer, cavity)
+    cavity = sd_round_box(x, y, z - 15.0, 30.5, 26.0, 24.5, 8.5)
+    shell = op_subtract(torso_outer, cavity)
 
-    # Top Neck Ring (mates with 1_head_shell.stl neck collar) + 28 mm wire channel
+    # Top Neck Ring (mates with 1_head_shell.stl neck collar) + 25 mm wire channel
     neck_peg = sd_cylinder_z(x, y, z - 46.5, 15.6, 3.5)
     neck_hole = sd_cylinder_z(x, y, z - 43.0, 12.5, 9.0)
     shell = op_subtract(op_union(shell, neck_peg), neck_hole)
 
-    # Shoulder Pivot Bosses + 6.2 mm Arm Pivot Sockets (x = +/-37, z = +26)
+    # Shoulder Pivot Bosses + 6.2 mm Arm Pivot Sockets (x = +/-36, z = +25)
     sh_boss_l = sd_cylinder_x(x + 36.0, y, z - 25.0, 9.5, 3.0)
     sh_boss_r = sd_cylinder_x(x - 36.0, y, z - 25.0, 9.5, 3.0)
     shell = op_union(shell, op_union(sh_boss_l, sh_boss_r))
@@ -296,14 +288,40 @@ def sdf_torso_and_feet(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarra
     sg90_pocket = sd_round_box(x - 30.0, y, z - 25.0, 8.0, 6.4, 11.6, 0.5)
     shell = op_subtract(shell, op_union(sh_socket_l, op_union(sh_socket_r, sg90_pocket)))
 
+    # Curved Lower Hip Socket Recesses (x = +/-18.0, z = -14.5) matching robot_hero.jpg hip seams
+    hip_cut_l = sd_cylinder_x(x + 18.0, y, z + 14.5, 13.8, 9.8)
+    hip_cut_r = sd_cylinder_x(x - 18.0, y, z + 14.5, 13.8, 9.8)
+    shell = op_subtract(shell, op_union(hip_cut_l, hip_cut_r))
+
+    # Heavy-duty 8.0 mm Hip Pivot Axles + Click-Detent Ridges (0 deg standing, +/-25 deg stride, 90 deg sit)
+    hip_axle_l = sd_cylinder_x(x + 18.0, y, z + 14.5, 4.0, 10.2)
+    hip_axle_r = sd_cylinder_x(x - 18.0, y, z + 14.5, 4.0, 10.2)
+    # 0-deg vertical standing lock ridge & 90-deg forward sitting detent ridge on both hip axles
+    detent_stand_l = sd_round_box(x + 18.0, y, z + 10.3, 8.5, 0.9, 1.1, 0.3)
+    detent_stand_r = sd_round_box(x - 18.0, y, z + 10.3, 8.5, 0.9, 1.1, 0.3)
+    detent_sit_l = sd_round_box(x + 18.0, y + 4.2, z + 14.5, 8.5, 1.1, 0.9, 0.3)
+    detent_sit_r = sd_round_box(x - 18.0, y + 4.2, z + 14.5, 8.5, 1.1, 0.9, 0.3)
+    shell = op_union(
+        shell,
+        op_union(
+            op_union(hip_axle_l, hip_axle_r),
+            op_union(op_union(detent_stand_l, detent_stand_r), op_union(detent_sit_l, detent_sit_r)),
+        ),
+    )
+
+    # Dual-Mode Internal SG90 Hip Servo Pockets (tucked above left/right hip sockets for optional motorized walking)
+    sg90_hip_l = sd_round_box(x + 22.0, y, z + 1.5, 6.4, 11.6, 8.0, 0.5)
+    sg90_hip_r = sd_round_box(x - 22.0, y, z + 1.5, 6.4, 11.6, 8.0, 0.5)
+    shell = op_subtract(shell, op_union(sg90_hip_l, sg90_hip_r))
+
     # Internal ESP32-S3 Board Vertical Cradle Rails (holds 28.5 mm wide HW678 V0.0.0 PCB)
-    esp_rail_l = sd_round_box(x + 15.2, y + 6.0, z - 10.0, 1.5, 3.0, 22.0, 0.3)
-    esp_rail_r = sd_round_box(x - 15.2, y + 6.0, z - 10.0, 1.5, 3.0, 22.0, 0.3)
+    esp_rail_l = sd_round_box(x + 15.2, y + 6.0, z - 14.0, 1.5, 3.0, 20.0, 0.3)
+    esp_rail_r = sd_round_box(x - 15.2, y + 6.0, z - 14.0, 1.5, 3.0, 20.0, 0.3)
     shell = op_union(shell, op_union(esp_rail_l, esp_rail_r))
 
     # Rear Service Door Opening (y = +33 is back) + Lower USB-C Cable Slot
-    back_door_cut = sd_round_box(x, y - 28.0, z - 14.0, 26.0, 8.0, 22.0, 5.0)
-    usbc_slot = sd_round_box(x, y - 28.0, z + 11.5, 8.0, 8.0, 4.5, 2.0)
+    back_door_cut = sd_round_box(x, y - 28.0, z - 15.0, 26.0, 8.0, 21.0, 5.0)
+    usbc_slot = sd_round_box(x, y - 28.0, z + 8.5, 8.0, 8.0, 4.2, 2.0)
     shell = op_subtract(shell, op_union(back_door_cut, usbc_slot))
 
     return shell
@@ -357,6 +375,75 @@ def sdf_arms_pair(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
     left_arm = sdf_single_arm(x + 20.0, y, z, -1.0)
     right_arm = sdf_single_arm(x - 20.0, y, z, +1.0)
     return op_union(left_arm, right_arm)
+
+
+# ============================================================================
+# Part 7: Movable Left & Right Thighs (`7_thighs_left_and_right.stl`)
+#   - Top snap-on C-fork hip joint (8.4 mm bore + 0/25/90 deg click-detent notch)
+#   - Bottom spherical/cylindrical ankle ball-and-detent stud (swivel + tilt)
+# ============================================================================
+
+
+def sdf_single_thigh(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
+    # Thigh column centered at z = 0, top hip boss at z = +10, bottom ankle stud at z = -15
+    hip_drum = sd_cylinder_x(x, y, z - 9.0, 12.2, 8.5)
+    thigh_shaft = sd_cylinder_z(x, y, z + 1.0, 12.2, 11.0)
+    thigh_body = smin(hip_drum, thigh_shaft, 3.0)
+
+    # Snap-fit 8.4 mm Hip Axle Bore + C-clip snap throat at top (z = +9.0) + detent groove
+    hip_bore = sd_cylinder_x(x, y, z - 9.0, 4.25, 10.0)
+    snap_throat = sd_round_box(x, y, z - 16.0, 9.5, 3.3, 6.0, 0.5)
+    detent_groove_v = sd_round_box(x, y, z - 13.2, 9.5, 1.1, 1.4, 0.3)
+    detent_groove_h = sd_round_box(x, y + 4.2, z - 9.0, 9.5, 1.4, 1.1, 0.3)
+    thigh_body = op_subtract(
+        thigh_body,
+        op_union(op_union(hip_bore, snap_throat), op_union(detent_groove_v, detent_groove_h)),
+    )
+
+    # Bottom Swivel + Tilt Ankle Pivot Boss (z = -14.5) with flat-standing detent key
+    ankle_neck = sd_cylinder_z(x, y, z + 12.5, 6.2, 4.0)
+    ankle_ball = sd_sphere(x, y, z + 16.0, 7.2)
+    ankle_key = sd_round_box(x, y, z + 16.0, 7.6, 1.2, 2.0, 0.4)
+    return op_union(thigh_body, op_union(ankle_neck, op_union(ankle_ball, ankle_key)))
+
+
+def sdf_thighs_pair(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
+    left_thigh = sdf_single_thigh(x + 18.0, y, z)
+    right_thigh = sdf_single_thigh(x - 18.0, y, z)
+    return op_union(left_thigh, right_thigh)
+
+
+# ============================================================================
+# Part 8: Movable Left & Right Shoes/Feet (`8_feet_left_and_right.stl`)
+#   - Wide pill-shaped robot shoes with flat sole + snap-in swivel/tilt ankle socket
+# ============================================================================
+
+
+def sdf_single_foot(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
+    # Shoe body with rounded toe (+Y forward) and ankle cuff at z = +6
+    shoe_base = sd_round_box(x, y + 3.5, z + 2.0, 14.5, 19.5, 7.2, 5.5)
+    ankle_cuff = sd_cylinder_z(x, y, z - 4.5, 11.2, 4.5)
+    foot_outer = smin(shoe_base, ankle_cuff, 3.0)
+
+    # Exact flat bottom sole at z = -9.0 for rock-solid standing balance
+    sole_clip = z + 9.0
+    foot_outer = np.maximum(foot_outer, -sole_clip)
+
+    # Top Snap-In Ankle Socket (mates with thigh ankle_ball + 0-deg flat-standing detent slot)
+    socket_sphere = sd_sphere(x, y, z - 6.0, 7.5)
+    socket_throat = sd_cylinder_z(x, y, z - 9.5, 6.7, 4.0)
+    detent_slot_0 = sd_round_box(x, y, z - 6.0, 8.0, 1.4, 2.5, 0.4)
+    detent_slot_stride = sd_round_box(x, y, z - 6.0, 1.4, 8.0, 2.5, 0.4)
+    return op_subtract(
+        foot_outer,
+        op_union(op_union(socket_sphere, socket_throat), op_union(detent_slot_0, detent_slot_stride)),
+    )
+
+
+def sdf_feet_pair(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
+    left_foot = sdf_single_foot(x + 18.0, y, z)
+    right_foot = sdf_single_foot(x - 18.0, y, z)
+    return op_union(left_foot, right_foot)
 
 
 # ============================================================================
@@ -508,7 +595,7 @@ def render_mesh_to_image(
 
 
 def main() -> None:
-    print("Generating 6 watertight 3D-printable .STL files for RoboAssistant...")
+    print("Generating 8 watertight 3D-printable .STL files for RoboAssistant...")
     parts_spec = [
         (
             "1_head_shell.stl",
@@ -535,11 +622,11 @@ def main() -> None:
             (130, 140, 152),
         ),
         (
-            "4_torso_and_feet.stl",
-            "Chubby Torso + Standing Feet + ESP32-S3 & SG90 Mounts",
-            sdf_torso_and_feet,
-            ((-42.0, 42.0), (-36.0, 36.0), (-54.0, 52.0)),
-            0.90,
+            "4_torso_shell.stl",
+            "Chubby Torso + Click-Detent Hip Axles + SG90 Hip/Arm Bays",
+            sdf_torso_shell,
+            ((-42.0, 42.0), (-36.0, 36.0), (-23.0, 52.0)),
+            0.85,
             (236, 240, 245),
         ),
         (
@@ -558,6 +645,22 @@ def main() -> None:
             0.75,
             (232, 236, 242),
         ),
+        (
+            "7_thighs_left_and_right.stl",
+            "Movable Hip-Pivot Thighs (0/25/90 deg Click-Detents + Ankle Ball)",
+            sdf_thighs_pair,
+            ((-33.0, 33.0), (-15.0, 15.0), (-25.0, 23.0)),
+            0.70,
+            (226, 232, 240),
+        ),
+        (
+            "8_feet_left_and_right.stl",
+            "Movable Swivel/Tilt Shoes with Flat-Standing Detents",
+            sdf_feet_pair,
+            ((-35.0, 35.0), (-25.0, 20.0), (-11.0, 11.0)),
+            0.70,
+            (236, 240, 245),
+        ),
     ]
 
     built_parts = {}
@@ -568,33 +671,43 @@ def main() -> None:
         dims = verts.max(axis=0) - verts.min(axis=0)
         size_kb = stl_path.stat().st_size / 1024.0
         print(
-            f"  [OK] {fname:<26} | {len(faces):>6} tris | "
+            f"  [OK] {fname:<28} | {len(faces):>6} tris | "
             f"{dims[0]:5.1f} x {dims[1]:5.1f} x {dims[2]:5.1f} mm | {size_kb:6.1f} KB"
         )
         built_parts[fname] = (verts, faces, color, dims, desc)
 
     # Assemble full robot in world coordinates for the 3D CAD Engineering Preview Sheet
-    torso_v, torso_f, _, _, _ = built_parts["4_torso_and_feet.stl"]
+    feet_v, feet_f, _, _, _ = built_parts["8_feet_left_and_right.stl"]
+    thighs_v, thighs_f, _, _, _ = built_parts["7_thighs_left_and_right.stl"]
+    torso_v, torso_f, _, _, _ = built_parts["4_torso_shell.stl"]
     head_v, head_f, _, _, _ = built_parts["1_head_shell.stl"]
     visor_v, visor_f, _, _, _ = built_parts["2_front_visor_bezel.stl"]
     btn_v, btn_f, _, _, _ = built_parts["3_top_ptt_button_cap.stl"]
-    arms_v, arms_f, _, _, _ = built_parts["6_arms_left_and_right.stl"]
 
-    # Position head on top of torso (z = +95 mm)
+    # Feet sit on the ground at z = 0..18 mm
+    feet_world = feet_v.copy()
+    # Thighs snap into ankle sockets at z = +11 mm (leaving a clean visible ankle seam!)
+    thighs_world = thighs_v.copy()
+    thighs_world[:, 2] += 11.5
+    # Torso snaps onto hip drums at z = +34 mm (leaving a clean visible hip seam!)
+    torso_world = torso_v.copy()
+    torso_world[:, 2] += 34.0
+
+    # Position head on top of torso (z = +97 mm)
     head_world = head_v.copy()
-    head_world[:, 2] += 94.0
+    head_world[:, 2] += 97.0
 
-    # Rotate visor 90 deg around X to sit on the front of the head (y = -33.5 mm)
+    # Rotate visor 90 deg around X to sit on the front of the head (y = -32.0 mm)
     visor_world = np.zeros_like(visor_v)
     visor_world[:, 0] = visor_v[:, 0]
     visor_world[:, 1] = -visor_v[:, 2] - 32.0
-    visor_world[:, 2] = visor_v[:, 1] + 94.0 + 39.0
+    visor_world[:, 2] = visor_v[:, 1] + 97.0 + 39.0
 
     # Place button cap at top of head
     btn_world = btn_v.copy()
-    btn_world[:, 2] += 94.0 + 73.0
+    btn_world[:, 2] += 97.0 + 73.0
 
-    # Split left & right arms and place at shoulders (x = +/-43, z = +49)
+    # Split left & right arms and place at shoulders (x = +/-46.5, z = +47)
     arm_l_v = sdf_single_arm_mesh(-1.0)
     arm_r_v = sdf_single_arm_mesh(+1.0)
 
@@ -605,7 +718,7 @@ def main() -> None:
         step=0.8,
     )
     scr_v[:, 1] -= 31.0
-    scr_v[:, 2] += 94.0 + 25.0
+    scr_v[:, 2] += 97.0 + 25.0
 
     eye_v, eye_f = build_mesh_from_sdf(
         lambda x, y, z: op_union(
@@ -619,10 +732,12 @@ def main() -> None:
         step=0.6,
     )
     eye_v[:, 1] -= 32.2
-    eye_v[:, 2] += 94.0 + 30.0
+    eye_v[:, 2] += 97.0 + 30.0
 
     assembled_meshes = [
-        (torso_v, torso_f, (238, 242, 247)),
+        (feet_world, feet_f, (238, 242, 247)),
+        (thighs_world, thighs_f, (224, 230, 238)),
+        (torso_world, torso_f, (238, 242, 247)),
         (head_world, head_f, (238, 242, 247)),
         (visor_world, visor_f, (28, 32, 40)),
         (scr_v, scr_f, (12, 16, 22)),
@@ -634,56 +749,57 @@ def main() -> None:
 
     hero_img = render_mesh_to_image(
         assembled_meshes,
-        img_w=720,
-        img_h=820,
+        img_w=700,
+        img_h=860,
         yaw_deg=-26.0,
         pitch_deg=14.0,
-        scale=3.8,
-        center_offset=(0.0, 0.0, 86.0),
+        scale=3.75,
+        center_offset=(0.0, 0.0, 88.0),
     )
 
-    # Overlay glowing cyan robot eyes + smile on the rendered black visor for preview clarity
-    sheet = Image.new("RGB", (1480, 820), (14, 18, 26))
+    sheet = Image.new("RGB", (1500, 860), (14, 18, 26))
     sheet.paste(hero_img, (0, 0))
     draw = ImageDraw.Draw(sheet)
 
-    # Right-side 2x3 grid of the 6 individual printable .STL parts
+    # Right-side 2x4 grid of all 8 individual printable .STL parts
     grid_positions = [
-        ("1_head_shell.stl", 740, 40, 2.2, (0.0, 0.0, 36.0)),
-        ("2_front_visor_bezel.stl", 1110, 40, 2.8, (0.0, 0.0, 2.0)),
-        ("3_top_ptt_button_cap.stl", 740, 295, 4.0, (0.0, 0.0, 4.0)),
-        ("4_torso_and_feet.stl", 1110, 295, 1.9, (0.0, 0.0, 48.0)),
-        ("5_back_access_door.stl", 740, 550, 2.8, (0.0, 0.0, 2.0)),
-        ("6_arms_left_and_right.stl", 1110, 550, 2.3, (0.0, 0.0, 28.0)),
+        ("1_head_shell.stl", 720, 35, 1.85, (0.0, 0.0, 36.0)),
+        ("2_front_visor_bezel.stl", 1105, 35, 2.4, (0.0, 0.0, 2.0)),
+        ("3_top_ptt_button_cap.stl", 720, 235, 3.3, (0.0, 0.0, 4.0)),
+        ("4_torso_shell.stl", 1105, 235, 1.85, (0.0, 0.0, 34.0)),
+        ("5_back_access_door.stl", 720, 435, 2.4, (0.0, 0.0, 2.0)),
+        ("6_arms_left_and_right.stl", 1105, 435, 1.95, (0.0, 0.0, 28.0)),
+        ("7_thighs_left_and_right.stl", 720, 635, 2.2, (0.0, 0.0, 18.0)),
+        ("8_feet_left_and_right.stl", 1105, 635, 2.1, (0.0, 0.0, 9.0)),
     ]
 
     for fname, gx, gy, gscale, goff in grid_positions:
         v, f, col, dims, _ = built_parts[fname]
         tile = render_mesh_to_image(
             [(v, f, col)],
-            img_w=340,
-            img_h=230,
+            img_w=365,
+            img_h=185,
             yaw_deg=-30.0,
             pitch_deg=24.0,
             scale=gscale,
             center_offset=goff,
         )
         sheet.paste(tile, (gx, gy))
-        draw.rectangle([gx, gy, gx + 340, gy + 230], outline=(45, 65, 90), width=2)
+        draw.rectangle([gx, gy, gx + 365, gy + 185], outline=(45, 65, 90), width=2)
         draw.text(
-            (gx + 10, gy + 8),
+            (gx + 10, gy + 6),
             f"{fname} ({dims[0]:.0f}x{dims[1]:.0f}x{dims[2]:.0f} mm)",
             fill=(0, 225, 255),
         )
 
     draw.text(
-        (24, 20),
-        "ROBOASSISTANT 3D-PRINTABLE CAD ASSEMBLY (180 mm Tall | 6 Watertight .STL Parts)",
+        (24, 18),
+        "ROBOASSISTANT 3D-PRINTABLE CAD ASSEMBLY (180 mm Tall | 8 Watertight .STL Parts | Movable Hips, Ankles & Arms)",
         fill=(0, 225, 255),
     )
     draw.text(
-        (24, 785),
-        "Fitted for: ESP32-S3 N16R8 (HW678) + 1.3\" ST7789 7-Pin + 48mm 8Ohm 3W Speaker + INMP441 + MAX98357A + 6x6mm PTT",
+        (24, 825),
+        "Fitted for: ESP32-S3 N16R8 (HW678) + 1.3\" ST7789 7-Pin + 48mm 8Ohm 3W Speaker + INMP441 + MAX98357A + SG90 Hip/Arm Bays",
         fill=(170, 185, 205),
     )
 
@@ -698,7 +814,7 @@ def sdf_single_arm_mesh(side: float) -> Tuple[np.ndarray, np.ndarray]:
 
     v, f = build_mesh_from_sdf(fn, ((-15.0, 15.0), (-12.0, 12.0), (-33.0, 29.0)), step=0.8)
     v[:, 0] += -side * 46.5
-    v[:, 2] += 44.0
+    v[:, 2] += 47.0
     return v, f
 
 
