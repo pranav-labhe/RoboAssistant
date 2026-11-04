@@ -110,7 +110,7 @@ This visual reference maps each physical component arriving in your delivery dir
 
 ---
 
-### 🖨️ 3D-Printable Robot Enclosure (`cad/` — 180 mm Tall, 8 Modular `.STL` Parts with Movable Hips, Ankles & Arms)
+### 🖨️ 3D-Printable Robot Enclosure (`cad/` — `135 mm` / `13.5 cm` Compact Tabletop Size, 8 Modular `.STL` Parts with Movable Hips, Ankles & Arms)
 
 <p align="center">
   <img src="cad/robot_cad_preview.png" width="100%" alt="RoboAssistant 3D-Printable CAD Assembly & STL Parts">

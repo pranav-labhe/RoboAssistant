@@ -121,97 +121,97 @@ def op_subtract(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 
 # ============================================================================
-# Part 1: Rounded Squircle Head Shell (`1_head_shell.stl`)
-#   - Outer: 84 mm (X) x 68 mm (Y depth) x 72 mm (Z height), 11 mm fillet
-#   - Wall thickness: 2.8 mm
-#   - Front Visor Pocket + 26.5 x 26.5 mm ST7789 active screen cutout + PCB rails
-#   - Right & Left Ear 48.6 mm Speaker Mount + 19-hole acoustic honeycomb grille
-#   - Top 28.6 mm PTT Button Socket + 6.3 x 6.3 mm tactile switch cradle
-#   - Top-Front isolated 3.2 mm INMP441 Mic port + 15 mm acoustic baffle ring
+# Part 1: Compact Rounded Squircle Head Shell (`1_head_shell.stl` — 135mm Tall Kit)
+#   - Outer: 66 mm (X) x 52 mm (Y depth) x 55 mm (Z height), 9.5 mm fillet
+#   - Wall thickness: 2.4 mm (fits 48mm Speaker + 1.3" ST7789 1:1 hardware!)
 # ============================================================================
 
 
 def sdf_head_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    # 1. Outer & inner rounded cube shell (Z centered at 0 -> -36..+36)
-    outer = sd_round_box(x, y, z, 42.0, 34.0, 36.0, 11.0)
-    inner = sd_round_box(x, y, z, 39.2, 31.2, 33.2, 8.5)
+    # 1. Outer & inner rounded squircle shell (Z centered at 0 -> -27.5..+27.5 = 55 mm tall)
+    outer = sd_round_box(x, y, z, 33.0, 26.0, 27.5, 9.5)
+    inner = sd_round_box(x, y, z, 30.6, 23.6, 25.1, 7.5)
     shell = op_subtract(outer, inner)
 
-    # 2. Front visor recess (y = -34 is front face)
-    visor_recess = sd_round_box(x, y + 33.0, z - 1.0, 32.0, 3.2, 26.0, 7.0)
+    # 2. Front visor recess (shallow 1.0 mm pocket on y = -26.0 front face, leaving 1.4 mm solid backing wall)
+    visor_recess = sd_round_box(x, y + 26.0, z - 0.5, 24.0, 1.0, 19.0, 5.5)
     shell = op_subtract(shell, visor_recess)
 
-    # 3. 1.3" ST7789 240x240 IPS Display Window (26.6 x 26.6 mm through-cut)
-    tft_window = sd_round_box(x, y + 31.5, z - 1.0, 13.3, 6.0, 13.3, 2.5)
+    # 3. 1.3" ST7789 240x240 IPS Display Window (exact 26.6 x 26.6 mm 1:1 hardware through-cut!)
+    tft_window = sd_round_box(x, y + 24.8, z - 0.5, 13.3, 3.5, 13.3, 2.5)
     shell = op_subtract(shell, tft_window)
 
-    # Internal ST7789 PCB retention rails (holds 35.5 x 39.0 mm 7-pin module behind window)
-    left_rail = sd_round_box(x + 19.5, y + 27.5, z - 1.0, 1.6, 2.5, 19.0, 0.4)
-    right_rail = sd_round_box(x - 19.5, y + 27.5, z - 1.0, 1.6, 2.5, 19.0, 0.4)
-    bottom_ledge = sd_round_box(x, y + 27.5, z + 20.5, 19.5, 2.5, 1.8, 0.4)
-    shell = op_union(shell, op_union(left_rail, op_union(right_rail, bottom_ledge)))
+    # Internal ST7789 PCB retention rails (holds exact 35.5 x 39.0 mm 7-pin module behind window, clipped to outer)
+    left_rail = sd_round_box(x + 19.2, y + 21.5, z - 0.5, 1.4, 2.2, 18.5, 0.3)
+    right_rail = sd_round_box(x - 19.2, y + 21.5, z - 0.5, 1.4, 2.2, 18.5, 0.3)
+    bottom_ledge = sd_round_box(x, y + 21.5, z + 19.0, 19.2, 2.2, 1.5, 0.3)
+    rails = np.maximum(op_union(left_rail, op_union(right_rail, bottom_ledge)), outer)
+    shell = op_union(shell, rails)
 
-    # 4. Side Speaker Grille ("Ears" at x = +42 and x = -42) + 48.6 mm Speaker Retention Ring
-    ear_boss_r = sd_cylinder_x(x - 41.2, y, z, 21.0, 1.6)
-    ear_boss_l = sd_cylinder_x(x + 41.2, y, z, 21.0, 1.6)
-    ear_ring_cut_r = sd_cylinder_x(x - 42.2, y, z, 19.0, 1.6)
-    ear_ring_cut_l = sd_cylinder_x(x + 42.2, y, z, 19.0, 1.6)
+    # 4. Side Speaker Grille ("Ears" at x = +/-33) + Internal 48.6 mm Speaker Collar on Right Ear
+    ear_boss_r = sd_cylinder_x(x - 32.4, y, z, 15.8, 1.2)
+    ear_boss_l = sd_cylinder_x(x + 32.4, y, z, 15.8, 1.2)
+    ear_ring_cut_r = sd_cylinder_x(x - 33.4, y, z, 14.2, 0.9)
+    ear_ring_cut_l = sd_cylinder_x(x + 33.4, y, z, 14.2, 0.9)
     shell = op_union(shell, op_union(ear_boss_r, ear_boss_l))
     shell = op_subtract(shell, op_union(ear_ring_cut_r, ear_ring_cut_l))
 
-    # Internal 48.8 mm ID retention collar on Right Ear for Electrobot 48mm 8Ohm 3W speaker
-    spk_collar_outer = sd_cylinder_x(x - 36.5, y, z, 26.8, 3.5)
-    spk_collar_inner = sd_cylinder_x(x - 36.5, y, z, 24.4, 4.5)
-    spk_collar = op_subtract(spk_collar_outer, spk_collar_inner)
+    # Internal 48.6 mm ID retention collar on Right Ear for Electrobot 48mm (2-Inch) 8Ohm 3W speaker
+    spk_collar_outer = sd_cylinder_x(x - 28.5, y, z, 26.2, 2.8)
+    spk_collar_inner = sd_cylinder_x(x - 28.5, y, z, 24.3, 3.8)
+    spk_collar = np.maximum(op_subtract(spk_collar_outer, spk_collar_inner), outer)
     shell = op_union(shell, spk_collar)
 
     # Perforated acoustic holes across both ear grilles (center + 2 hex rings = 19 holes)
     hole_coords = [(0.0, 0.0)]
     for i in range(6):
         ang = i * math.pi / 3.0
-        hole_coords.append((6.2 * math.cos(ang), 6.2 * math.sin(ang)))
+        hole_coords.append((4.8 * math.cos(ang), 4.8 * math.sin(ang)))
     for i in range(12):
         ang = i * math.pi / 6.0
-        hole_coords.append((12.4 * math.cos(ang), 12.4 * math.sin(ang)))
+        hole_coords.append((9.6 * math.cos(ang), 9.6 * math.sin(ang)))
     for hy, hz in hole_coords:
-        hole_Hole = sd_cylinder_x(x, y - hy, z - hz, 1.8, 46.0)
-        shell = op_subtract(shell, hole_Hole)
+        hole_cut = sd_cylinder_x(x, y - hy, z - hz, 1.5, 38.0)
+        shell = op_subtract(shell, hole_cut)
 
-    # 5. Top Circular PTT Button Collar + 6x6mm Tactile Switch Cradle (z = +36 is top)
+    # 5. Top Circular PTT Button Collar + Exact 6x6mm Tactile Switch Cradle (z = +27.5 is top)
     top_ring = op_subtract(
-        sd_cylinder_z(x, y, z - 35.5, 16.5, 2.5),
-        sd_cylinder_z(x, y, z - 35.5, 14.3, 6.0),
+        sd_cylinder_z(x, y, z - 27.0, 12.8, 2.2),
+        sd_cylinder_z(x, y, z - 27.0, 11.0, 5.0),
     )
     shell = op_union(shell, top_ring)
-    # Through-hole for top button plunger (28.4 mm clearance) & internal switch bridge
-    btn_hole = sd_cylinder_z(x, y, z - 34.5, 14.3, 5.0)
+    btn_hole = sd_cylinder_z(x, y, z - 26.5, 11.0, 4.5)
     shell = op_subtract(shell, btn_hole)
-    # Internal bridge platform holding the 6x6mm tactile switch 10 mm below top hole
-    sw_bridge = sd_round_box(x, y, z - 25.0, 20.0, 6.5, 1.8, 0.5)
-    sw_pocket = sd_round_box(x, y, z - 26.2, 3.25, 3.25, 1.5, 0.2)
-    sw_wire_slot = sd_round_box(x - 5.0, y, z - 25.0, 2.0, 4.0, 4.0, 0.2)
-    shell = op_union(shell, op_subtract(sw_bridge, op_union(sw_pocket, sw_wire_slot)))
+    # Internal bridge platform holding the 6x6mm tactile switch 8.5 mm below top hole
+    sw_bridge = sd_round_box(x, y, z - 18.5, 16.0, 6.0, 1.6, 0.4)
+    sw_pocket = sd_round_box(x, y, z - 19.5, 3.25, 3.25, 1.4, 0.2)
+    sw_wire_slot = sd_round_box(x - 4.5, y, z - 18.5, 1.8, 3.5, 3.5, 0.2)
+    sw_assy = np.maximum(op_subtract(sw_bridge, op_union(sw_pocket, sw_wire_slot)), outer)
+    shell = op_union(shell, sw_assy)
 
-    # 6. Isolated INMP441 Microphone Port & Internal Acoustic Isolation Wall (top-front)
-    mic_baffle = op_subtract(
-        sd_cylinder_y(x, y + 28.5, z - 22.5, 8.2, 3.5),
-        sd_cylinder_y(x, y + 28.5, z - 22.5, 6.2, 4.5),
+    # 6. Isolated INMP441 Microphone Port & Internal Acoustic Isolation Wall (top-left front)
+    mic_baffle = np.maximum(
+        op_subtract(
+            sd_cylinder_y(x + 16.5, y + 22.0, z - 16.0, 7.2, 2.8),
+            sd_cylinder_y(x + 16.5, y + 22.0, z - 16.0, 5.5, 3.8),
+        ),
+        outer,
     )
-    mic_pinhole = sd_cylinder_y(x, y + 32.0, z - 22.5, 1.8, 6.0)
+    mic_pinhole = sd_cylinder_y(x + 16.5, y + 25.0, z - 16.0, 1.5, 4.0)
     shell = op_union(shell, mic_baffle)
     shell = op_subtract(shell, mic_pinhole)
 
-    # 7. Bottom Neck Socket + Wire Pass-Through (z = -36) & Back Assembly Open Access
-    neck_open = sd_cylinder_z(x, y, z + 35.0, 16.0, 5.0)
+    # 7. Bottom Neck Socket + 26 mm Wire Pass-Through (z = -27.5) & Rear Access Opening
+    neck_open = sd_cylinder_z(x, y, z + 26.5, 13.5, 4.5)
     neck_collar = op_subtract(
-        sd_cylinder_z(x, y, z + 36.5, 19.0, 3.0),
-        sd_cylinder_z(x, y, z + 36.5, 16.0, 4.0),
+        sd_cylinder_z(x, y, z + 27.5, 16.0, 2.5),
+        sd_cylinder_z(x, y, z + 27.5, 13.5, 3.5),
     )
     shell = op_subtract(shell, neck_open)
     shell = op_union(shell, neck_collar)
 
-    # Removable rear head service opening so ST7789 + 48mm Speaker slide in effortlessly
-    rear_access = sd_round_box(x, y - 32.0, z - 1.0, 27.0, 5.0, 22.0, 6.0)
+    # Removable rear head service opening so 48mm Speaker + ST7789 slide in effortlessly
+    rear_access = sd_round_box(x, y - 25.0, z, 19.5, 3.5, 16.0, 4.0)
     shell = op_subtract(shell, rear_access)
 
     return shell
@@ -219,15 +219,16 @@ def sdf_head_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
 
 # ============================================================================
 # Part 2: Snap-In Front Black Visor Bezel (`2_front_visor_bezel.stl`)
+#   - Outer: 47.6 x 37.6 mm, Window: exact 26.4 x 26.4 mm for 1.3" ST7789
 # ============================================================================
 
 
 def sdf_front_visor(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    plate = sd_round_box(x, y, z, 31.6, 25.6, 2.2, 6.8)
+    plate = sd_round_box(x, y, z, 23.8, 18.8, 1.6, 5.3)
     window = sd_round_box(x, y, z, 13.2, 13.2, 4.0, 2.4)
     lip = op_subtract(
-        sd_round_box(x, y, z + 1.8, 15.2, 15.2, 1.8, 3.0),
-        sd_round_box(x, y, z + 1.8, 13.2, 13.2, 3.0, 2.4),
+        sd_round_box(x, y, z + 1.4, 14.8, 14.8, 1.4, 2.8),
+        sd_round_box(x, y, z + 1.4, 13.2, 13.2, 2.5, 2.4),
     )
     return op_union(op_subtract(plate, window), lip)
 
@@ -238,78 +239,73 @@ def sdf_front_visor(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
 
 
 def sdf_top_button_cap(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    cap = sd_cylinder_z(x, y, z - 2.0, 13.8, 2.5)
-    flange = sd_cylinder_z(x, y, z + 1.0, 15.2, 1.2)
-    hollow = sd_cylinder_z(x, y, z + 0.5, 11.8, 2.2)
-    plunger = sd_cylinder_z(x, y, z + 2.5, 2.8, 3.5)
+    cap = sd_cylinder_z(x, y, z - 1.8, 10.6, 2.0)
+    flange = sd_cylinder_z(x, y, z + 0.8, 11.8, 1.0)
+    hollow = sd_cylinder_z(x, y, z + 0.4, 9.0, 1.8)
+    plunger = sd_cylinder_z(x, y, z + 2.0, 2.5, 3.0)
     body = op_subtract(op_union(cap, flange), hollow)
     return op_union(body, plunger)
 
 
 # ============================================================================
-# Part 4: Chubby Oval/Egg Torso Shell (`4_torso_shell.stl`)
-#   - True oval/egg silhouette matching `robot_hero.jpg` (no boxy corners!)
-#   - Lightweight 2.8 mm wall + 45-deg self-supporting teardrop interior (Option B)
-#   - Houses ESP32-S3 (`HW678 V0.0.0`), MAX98357A, 1000uF cap, and 18650 slot
-#   - Right shoulder SG90 micro-servo pocket + Left/Right 6mm arm pivot sockets
-#   - Angled crescent Hip Pivot Sockets (0/25/90 deg click-detent axles + SG90 hip bays)
+# Part 4: Compact Chubby Oval Torso Shell (`4_torso_shell.stl` — 135mm Tall Kit)
+#   - Outer: 62 x 50 x 52 mm smooth oval belly (2.4 mm lightweight wall)
+#   - Houses ESP32-S3 (`HW678 V0.0.0`), MAX98357A, 1000uF cap
+#   - Click-detent Hip Pivot Axles + Right-Shoulder SG90 Pocket
 # ============================================================================
 
 
 def sdf_torso_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    # True plump oval/egg belly matching attached photo: wider at mid-belly, tapering at shoulders & pelvis
-    taper = 1.0 - 0.0035 * (z - 8.0)  # gentle egg taper toward top shoulders
-    belly_main = sd_ellipsoid(x * taper, y, z - 12.0, 38.5, 33.0, 36.5)
-    tummy_bulge = sd_sphere(x * 0.92, y + 1.5, z - 9.0, 32.0)
-    torso_outer = smin(belly_main, tummy_bulge, 6.0)
+    # Plump compact oval belly (z = -16.5 bottom pelvis pad to z = +32.5 top neck deck)
+    taper = 1.0 - 0.004 * (z - 6.0)
+    belly_main = sd_ellipsoid(x * taper, y, z - 8.5, 29.8, 25.2, 27.8)
+    tummy_bulge = sd_sphere(x * 0.92, y + 1.2, z - 6.5, 24.5)
+    torso_outer = smin(belly_main, tummy_bulge, 4.5)
 
-    # Small flat bottom pelvis print pad (z = -21.5) & flat top neck deck (z = +43.0)
-    bottom_clip = z + 21.5
+    bottom_clip = z + 16.5
     torso_outer = np.maximum(torso_outer, -bottom_clip)
-    top_clip = -(z - 43.0)
+    top_clip = -(z - 32.5)
     torso_outer = np.maximum(torso_outer, -top_clip)
 
-    # Lightweight 2.8 mm uniform oval interior cavity (saves ~35% PLA, 100% solid front belly wall)
-    cavity_oval = sd_ellipsoid(x * taper, y, z - 12.0, 35.0, 29.8, 33.0)
+    # Lightweight 2.4 mm uniform oval interior cavity
+    cavity_oval = sd_ellipsoid(x * taper, y, z - 8.5, 27.3, 22.7, 25.3)
     shell = op_subtract(torso_outer, cavity_oval)
 
-    # Top Neck Ring (mates with 1_head_shell.stl neck collar) + 25 mm wire channel
-    neck_peg = sd_cylinder_z(x, y, z - 45.5, 15.6, 3.5)
-    neck_hole = sd_cylinder_z(x, y, z - 42.0, 12.5, 9.0)
+    # Top Neck Ring (mates with 1_head_shell.stl neck collar) + 22 mm open wire/PCB top clearance
+    neck_peg = sd_cylinder_z(x, y, z - 34.5, 13.1, 2.8)
+    neck_hole = sd_cylinder_z(x, y, z - 31.5, 10.8, 7.5)
     shell = op_subtract(op_union(shell, neck_peg), neck_hole)
 
-    # Flush Shoulder Pivot Sockets recessed into upper oval curve (x = +/-33.5, z = +25)
-    sh_socket_l = sd_cylinder_x(x + 33.5, y, z - 25.0, 3.2, 8.0)
-    sh_socket_r = sd_cylinder_x(x - 33.5, y, z - 25.0, 3.2, 8.0)
-    # Right-shoulder internal SG90 micro-servo pocket (23.2 x 12.6 x 16.0 mm) for future [WAVE] motor
-    sg90_pocket = sd_round_box(x - 26.5, y, z - 25.0, 7.0, 6.4, 11.6, 0.5)
+    # Flush Shoulder Pivot Sockets recessed into upper oval curve (x = +/-26.0, z = +18.5)
+    sh_socket_l = sd_cylinder_x(x + 26.0, y, z - 18.5, 2.9, 6.5)
+    sh_socket_r = sd_cylinder_x(x - 26.0, y, z - 18.5, 2.9, 6.5)
+    sg90_pocket = sd_round_box(x - 21.0, y, z - 18.5, 6.0, 6.3, 11.6, 0.4)
     shell = op_subtract(shell, op_union(sh_socket_l, op_union(sh_socket_r, sg90_pocket)))
 
-    # Angled Crescent Lower Hip Socket Recesses (x = +/-17.5, z = -12.0) so thighs tuck flush into oval belly!
-    hip_wall_l = sd_sphere(x + 17.5, y, z + 12.0, 16.2)
-    hip_wall_r = sd_sphere(x - 17.5, y, z + 12.0, 16.2)
+    # Angled Crescent Lower Hip Socket Recesses (x = +/-13.5, z = -9.5)
+    hip_wall_l = sd_sphere(x + 13.5, y, z + 9.5, 12.6)
+    hip_wall_r = sd_sphere(x - 13.5, y, z + 9.5, 12.6)
     shell = op_union(shell, op_union(hip_wall_l, hip_wall_r))
-    # Re-carve main upper electronics cavity above hip domes (strictly inside outer wall)
-    upper_cav = sd_ellipsoid(x * taper, y, z - 16.0, 33.5, 28.2, 24.0)
+    upper_cav = sd_ellipsoid(x * taper, y, z - 11.5, 26.2, 21.8, 18.5)
     shell = op_subtract(shell, upper_cav)
 
     hip_cut_l = op_union(
-        sd_sphere(x + 17.5, y, z + 12.5, 13.6),
-        sd_cylinder_z(x + 17.5, y, z + 19.0, 13.4, 7.0),
+        sd_sphere(x + 13.5, y, z + 10.0, 10.6),
+        sd_cylinder_z(x + 13.5, y, z + 14.5, 10.4, 5.5),
     )
     hip_cut_r = op_union(
-        sd_sphere(x - 17.5, y, z + 12.5, 13.6),
-        sd_cylinder_z(x - 17.5, y, z + 19.0, 13.4, 7.0),
+        sd_sphere(x - 13.5, y, z + 10.0, 10.6),
+        sd_cylinder_z(x - 13.5, y, z + 14.5, 10.4, 5.5),
     )
     shell = op_subtract(shell, op_union(hip_cut_l, hip_cut_r))
 
-    # Heavy-duty 8.0 mm Hip Pivot Axles + Click-Detent Ridges (0 deg standing, +/-25 deg stride, 90 deg sit)
-    hip_axle_l = sd_cylinder_x(x + 17.5, y, z + 12.5, 4.0, 9.5)
-    hip_axle_r = sd_cylinder_x(x - 17.5, y, z + 12.5, 4.0, 9.5)
-    detent_stand_l = sd_round_box(x + 17.5, y, z + 8.3, 8.2, 0.9, 1.1, 0.3)
-    detent_stand_r = sd_round_box(x - 17.5, y, z + 8.3, 8.2, 0.9, 1.1, 0.3)
-    detent_sit_l = sd_round_box(x + 17.5, y + 4.2, z + 12.5, 8.2, 1.1, 0.9, 0.3)
-    detent_sit_r = sd_round_box(x - 17.5, y + 4.2, z + 12.5, 8.2, 1.1, 0.9, 0.3)
+    # Heavy-duty 6.8 mm Hip Pivot Axles + Click-Detent Ridges (0 deg standing & 90 deg sit)
+    hip_axle_l = sd_cylinder_x(x + 13.5, y, z + 10.0, 3.4, 7.5)
+    hip_axle_r = sd_cylinder_x(x - 13.5, y, z + 10.0, 3.4, 7.5)
+    detent_stand_l = sd_round_box(x + 13.5, y, z + 6.4, 6.5, 0.8, 0.9, 0.25)
+    detent_stand_r = sd_round_box(x - 13.5, y, z + 6.4, 6.5, 0.8, 0.9, 0.25)
+    detent_sit_l = sd_round_box(x + 13.5, y + 3.6, z + 10.0, 6.5, 0.9, 0.8, 0.25)
+    detent_sit_r = sd_round_box(x - 13.5, y + 3.6, z + 10.0, 6.5, 0.9, 0.8, 0.25)
     shell = op_union(
         shell,
         op_union(
@@ -318,19 +314,14 @@ def sdf_torso_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
         ),
     )
 
-    # Dual-Mode Internal SG90 Hip Servo Pockets (tucked above left/right hip sockets)
-    sg90_hip_l = sd_round_box(x + 21.0, y, z - 2.0, 6.4, 11.6, 8.0, 0.5)
-    sg90_hip_r = sd_round_box(x - 21.0, y, z - 2.0, 6.4, 11.6, 8.0, 0.5)
-    shell = op_subtract(shell, op_union(sg90_hip_l, sg90_hip_r))
-
-    # Internal ESP32-S3 Board Vertical Cradle Rails (holds 28.5 mm wide HW678 V0.0.0 PCB)
-    esp_rail_l = sd_round_box(x + 15.2, y + 5.0, z - 15.0, 1.5, 3.0, 19.0, 0.3)
-    esp_rail_r = sd_round_box(x - 15.2, y + 5.0, z - 15.0, 1.5, 3.0, 19.0, 0.3)
+    # Internal ESP32-S3 Board Guide Rails (exact 28.8 mm channel width for HW678 V0.0.0 PCB!)
+    esp_rail_l = sd_round_box(x + 15.2, y + 3.5, z - 10.5, 1.3, 2.5, 15.5, 0.3)
+    esp_rail_r = sd_round_box(x - 15.2, y + 3.5, z - 10.5, 1.3, 2.5, 15.5, 0.3)
     shell = op_union(shell, op_union(esp_rail_l, esp_rail_r))
 
-    # Rear Service Door Opening (y = +33 is back) + Lower USB-C Cable Slot
-    back_door_cut = sd_round_box(x, y - 27.0, z - 15.0, 25.5, 9.0, 20.5, 5.0)
-    usbc_slot = sd_round_box(x, y - 25.0, z + 7.5, 8.0, 9.0, 4.2, 2.0)
+    # Rear Service Door Opening (matches 5_back_access_door.stl) + Lower USB-C Cable Slot
+    back_door_cut = sd_round_box(x, y - 21.0, z - 10.5, 20.5, 7.5, 16.5, 4.2)
+    usbc_slot = sd_round_box(x, y - 19.5, z + 5.5, 7.5, 7.5, 3.8, 1.8)
     shell = op_subtract(shell, op_union(back_door_cut, usbc_slot))
 
     return shell
@@ -338,20 +329,19 @@ def sdf_torso_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
 
 # ============================================================================
 # Part 5: Snap-Fit Back Service Door (`5_back_access_door.stl`)
-#   - Covers the rear service opening on the head or torso with cooling slots
+#   - Fits both the rear head access opening and rear torso service opening
 # ============================================================================
 
 
 def sdf_back_door(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    plate = sd_round_box(x, y, z, 27.5, 23.5, 1.8, 5.2)
+    plate = sd_round_box(x, y, z, 22.0, 18.0, 1.5, 4.5)
     inner_lip = op_subtract(
-        sd_round_box(x, y, z - 2.2, 25.7, 21.7, 2.0, 4.8),
-        sd_round_box(x, y, z - 2.2, 23.5, 19.5, 3.0, 4.0),
+        sd_round_box(x, y, z - 1.8, 20.3, 16.3, 1.6, 4.0),
+        sd_round_box(x, y, z - 1.8, 18.5, 14.5, 2.5, 3.4),
     )
     door = op_union(plate, inner_lip)
-    # 3 ventilation louver slots
-    for sz in (-8.0, 0.0, 8.0):
-        slot = sd_round_box(x, y + sz, z, 16.0, 1.6, 5.0, 0.8)
+    for sz in (-6.0, 0.0, 6.0):
+        slot = sd_round_box(x, y + sz, z, 12.5, 1.4, 4.0, 0.6)
         door = op_subtract(door, slot)
     return door
 
@@ -364,85 +354,77 @@ def sdf_back_door(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
 
 
 def sdf_single_arm(x: np.ndarray, y: np.ndarray, z: np.ndarray, side: float) -> np.ndarray:
-    # +Z is shoulder top (z = +21.5), -Z is wrist/hand bottom (z = -14.5..-24.5)
-    t = np.clip((21.5 - z) / 36.0, 0.0, 1.0)
-    # Gentle banana curve bowing outward (-side * X in local coords) in mid-arm and curving in at hand
-    bow_x = -side * (3.2 * np.sin(t * math.pi) - 1.8 * (1.0 - t))
-    # Smooth radius profile: R=8.0 at shoulder, swelling to 9.3 at mid-arm, tapering to 7.5 at wrist
-    r_profile = 8.0 + 1.4 * np.sin(t * math.pi) - 0.5 * t
+    # Compact 135mm edition arm: +Z is shoulder top (z = +16.5), -Z is wrist/hand bottom (z = -11.0..-19.0)
+    t = np.clip((16.5 - z) / 27.5, 0.0, 1.0)
+    bow_x = -side * (2.5 * np.sin(t * math.pi) - 1.4 * (1.0 - t))
+    r_profile = 6.2 + 1.1 * np.sin(t * math.pi) - 0.4 * t
     arm_tube = np.sqrt((x - bow_x) ** 2 + y ** 2) - r_profile
-    arm_body = np.maximum(arm_tube, np.abs(z - 3.5) - 18.0)
+    arm_body = np.maximum(arm_tube, np.abs(z - 2.75) - 13.75)
 
-    # Round top shoulder cap at z = +16.5 & bevel inner shoulder face to sit flush against oval torso
-    shoulder_dome = sd_sphere(x - bow_x, y, z - 16.5, 8.8)
-    arm_body = smin(arm_body, shoulder_dome, 3.0)
-    inner_bevel = (side * (x - side * 2.5) + (z - 19.5) * 0.58)
+    # Round top shoulder cap at z = +12.5 & bevel inner shoulder face to sit flush against oval torso
+    shoulder_dome = sd_sphere(x - bow_x, y, z - 12.5, 6.8)
+    arm_body = smin(arm_body, shoulder_dome, 2.4)
+    inner_bevel = (side * (x - side * 2.0) + (z - 15.0) * 0.58)
     arm_body = np.maximum(arm_body, inner_bevel)
 
-    # Crisp horizontal wrist seam groove at z = -13.2 (matches reference photo wrist line)
+    # Crisp horizontal wrist seam groove at z = -10.0
     wrist_groove = op_subtract(
-        sd_cylinder_z(x - bow_x, y, z + 13.2, 9.5, 0.55),
-        sd_cylinder_z(x - bow_x, y, z + 13.2, 6.7, 1.2),
+        sd_cylinder_z(x - bow_x, y, z + 10.0, 7.5, 0.45),
+        sd_cylinder_z(x - bow_x, y, z + 10.0, 5.2, 1.0),
     )
     arm_body = op_subtract(arm_body, wrist_groove)
 
-    # Sculpted Robot Hand at bottom (z = -14 to -24.5): rounded mitten palm + front-inner thumb + curled fingers
-    hx = x + side * 0.5
-    palm_outer = sd_ellipsoid(hx, y, z + 18.5, 7.6, 6.8, 6.2)
-    # Scoop inner palm facing the body (+side * X, -Y front) so fingers curl inward toward the thighs!
-    palm_scoop = sd_sphere(hx - side * 3.2, y + 1.8, z + 20.0, 4.4)
+    # Sculpted Robot Hand at bottom (z = -10.5 to -18.8): rounded mitten palm + front-inner thumb + curled fingers
+    hx = x + side * 0.4
+    palm_outer = sd_ellipsoid(hx, y, z + 14.2, 5.9, 5.3, 4.8)
+    palm_scoop = sd_sphere(hx - side * 2.5, y + 1.4, z + 15.4, 3.4)
     hand = op_subtract(palm_outer, palm_scoop)
 
-    # Distinct rounded thumb on the front-inner side of the hand (y = -4.0, x = +side * 3.0)
-    thumb = sd_ellipsoid(hx - side * 3.0, y + 4.0, z + 18.0, 2.6, 2.8, 3.8)
-    hand = smin(hand, thumb, 1.2)
+    thumb = sd_ellipsoid(hx - side * 2.3, y + 3.1, z + 13.8, 2.0, 2.2, 3.0)
+    hand = smin(hand, thumb, 1.0)
 
-    # Two subtle finger separation grooves on the curled outer fingers
-    fg1 = sd_round_box(hx + side * 2.0, y - 0.5, z + 22.2, 4.0, 0.45, 2.5, 0.2)
-    fg2 = sd_round_box(hx + side * 2.0, y + 2.2, z + 22.2, 4.0, 0.45, 2.5, 0.2)
+    fg1 = sd_round_box(hx + side * 1.5, y - 0.4, z + 17.0, 3.2, 0.4, 2.0, 0.2)
+    fg2 = sd_round_box(hx + side * 1.5, y + 1.7, z + 17.0, 3.2, 0.4, 2.0, 0.2)
     hand = op_subtract(hand, op_union(fg1, fg2))
 
-    arm_full = smin(arm_body, hand, 1.2)
+    arm_full = smin(arm_body, hand, 1.0)
 
-    # Hidden shoulder pivot peg extending inward toward torso (+/- X) at z = +15.0
-    peg = sd_cylinder_x(x - side * 6.5, y, z - 15.0, 2.9, 5.5)
+    # Hidden shoulder pivot peg extending inward toward torso (+/- X) at z = +11.5
+    peg = sd_cylinder_x(x - side * 5.0, y, z - 11.5, 2.5, 4.5)
     return op_union(arm_full, peg)
 
 
 def sdf_arms_pair(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    left_arm = sdf_single_arm(x + 20.0, y, z, -1.0)
-    right_arm = sdf_single_arm(x - 20.0, y, z, +1.0)
+    left_arm = sdf_single_arm(x + 15.5, y, z, -1.0)
+    right_arm = sdf_single_arm(x - 15.5, y, z, +1.0)
     return op_union(left_arm, right_arm)
 
 
 # ============================================================================
-# Part 7: Movable Left & Right Thighs (`7_thighs_left_and_right.stl`)
-#   - Tall, wide, gently tapered cylindrical thighs matching `robot_hero.jpg`
-#   - Angled top pelvis saddle cut (`/   \`) + recessed internal hip pivot turret
-#   - Bottom cuff extends over the internal ankle ball so no skinny neck is visible
+# Part 7: Movable Left & Right Thighs (`7_thighs_left_and_right.stl` — 135mm Kit)
+#   - Tall, wide cylindrical thighs (20 mm visible pillar) with angled hip saddle
+#   - Recessed internal hip pivot turret + hidden ankle ball stud
 # ============================================================================
 
 
 def sdf_single_thigh(x: np.ndarray, y: np.ndarray, z: np.ndarray, side: float = 1.0) -> np.ndarray:
-    # +Z is top hip saddle (z = +13.5), -Z is bottom ankle cuff (z = -13.0) -> 26.5 mm tall visible pillar!
-    r_leg = 13.6 - 0.045 * (13.5 - z)  # 13.6 mm at hip tapering smoothly to 12.4 mm at ankle
+    # +Z is top hip saddle (z = +10.2), -Z is bottom ankle cuff (z = -9.8) -> 20.0 mm tall visible pillar!
+    r_leg = 10.6 - 0.04 * (10.2 - z)
     leg_cyl = np.sqrt(x * x + (y / 1.06) ** 2) - r_leg
-    # Top angled saddle plane matching the lower oval curve of the belly + flat bottom cuff at z = -13.0
-    top_saddle = (z - 13.0 + side * x * 0.26)
-    bot_cuff = -(z + 13.0)
+    top_saddle = (z - 10.0 + side * x * 0.26)
+    bot_cuff = -(z + 9.8)
     thigh_outer = np.maximum(leg_cyl, np.maximum(top_saddle, bot_cuff))
 
-    # Internal Hip Pivot Turret rising at z = +17.0 that slots inside the torso's hip socket
-    hip_turret = sd_cylinder_x(x, y, z - 17.0, 9.6, 7.8)
-    thigh_body = smin(thigh_outer, hip_turret, 2.0)
+    # Internal Hip Pivot Turret rising at z = +13.0 that slots inside the torso's hip socket
+    hip_turret = sd_cylinder_x(x, y, z - 13.0, 7.6, 6.2)
+    thigh_body = smin(thigh_outer, hip_turret, 1.6)
 
-    # Snap-fit 8.4 mm Hip Axle Bore + C-clip snap throat at top (z = +17.0) + click-detent grooves
-    hip_bore = sd_cylinder_x(x, y, z - 17.0, 4.25, 9.5)
-    snap_throat = sd_round_box(x, y, z - 23.0, 8.5, 3.3, 5.0, 0.5)
-    detent_groove_v = sd_round_box(x, y, z - 21.0, 8.5, 1.1, 1.4, 0.3)
-    detent_groove_h = sd_round_box(x, y + 4.2, z - 17.0, 8.5, 1.4, 1.1, 0.3)
-    # Lightweight internal hollow pocket inside thigh (reduces PLA weight)
-    thigh_hollow = sd_cylinder_z(x, y, z + 1.0, 8.2, 8.5)
+    # Snap-fit 7.2 mm Hip Axle Bore + C-clip snap throat at top (z = +13.0) + click-detent grooves
+    hip_bore = sd_cylinder_x(x, y, z - 13.0, 3.6, 7.5)
+    snap_throat = sd_round_box(x, y, z - 17.5, 6.8, 2.7, 4.0, 0.4)
+    detent_groove_v = sd_round_box(x, y, z - 16.4, 6.8, 0.9, 1.1, 0.25)
+    detent_groove_h = sd_round_box(x, y + 3.6, z - 13.0, 6.8, 1.1, 0.9, 0.25)
+    thigh_hollow = sd_cylinder_z(x, y, z + 0.8, 6.2, 6.5)
     thigh_body = op_subtract(
         thigh_body,
         op_union(
@@ -451,48 +433,44 @@ def sdf_single_thigh(x: np.ndarray, y: np.ndarray, z: np.ndarray, side: float = 
         ),
     )
 
-    # Bottom Swivel + Tilt Ankle Ball Stud at z = -17.0 tucked right below the wide thigh cuff
-    ankle_neck = sd_cylinder_z(x, y, z + 14.0, 6.4, 2.5)
-    ankle_ball = sd_sphere(x, y, z + 17.0, 7.2)
-    ankle_key = sd_round_box(x, y, z + 17.0, 7.6, 1.2, 2.0, 0.4)
+    # Bottom Swivel + Tilt Ankle Ball Stud at z = -13.0 tucked right below the wide thigh cuff
+    ankle_neck = sd_cylinder_z(x, y, z + 10.6, 5.0, 2.0)
+    ankle_ball = sd_sphere(x, y, z + 13.0, 5.8)
+    ankle_key = sd_round_box(x, y, z + 13.0, 6.1, 1.0, 1.6, 0.3)
     return op_union(thigh_body, op_union(ankle_neck, op_union(ankle_ball, ankle_key)))
 
 
 def sdf_thighs_pair(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    left_thigh = sdf_single_thigh(x + 17.5, y, z, -1.0)
-    right_thigh = sdf_single_thigh(x - 17.5, y, z, +1.0)
+    left_thigh = sdf_single_thigh(x + 13.5, y, z, -1.0)
+    right_thigh = sdf_single_thigh(x - 13.5, y, z, +1.0)
     return op_union(left_thigh, right_thigh)
 
 
 # ============================================================================
-# Part 8: Movable Left & Right Shoes/Feet (`8_feet_left_and_right.stl`)
-#   - Smooth domed sneaker-pod shoes (`sd_ellipsoid` toe) + wraparound raised ankle collar rim
+# Part 8: Movable Left & Right Shoes/Feet (`8_feet_left_and_right.stl` — 135mm Kit)
+#   - Smooth domed sneaker-pod shoes + wraparound raised ankle collar rim
 # ============================================================================
 
 
 def sdf_single_foot(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    # +Z is top ankle collar (z = +7.5), -Z is flat bottom sole (z = -8.5); -Y is forward toe!
-    toe_dome = sd_ellipsoid(x, y + 5.0, z + 3.5, 15.6, 21.5, 11.2)
-    heel_dome = sd_ellipsoid(x, y - 2.0, z + 2.0, 15.0, 15.5, 11.5)
-    shoe_pod = smin(toe_dome, heel_dome, 4.0)
+    # +Z is top ankle collar (z = +5.8), -Z is flat bottom sole (z = -6.5); -Y is forward toe!
+    toe_dome = sd_ellipsoid(x, y + 3.8, z + 2.6, 12.2, 16.8, 8.6)
+    heel_dome = sd_ellipsoid(x, y - 1.5, z + 1.5, 11.8, 12.2, 8.8)
+    shoe_pod = smin(toe_dome, heel_dome, 3.2)
 
-    # Raised wraparound ankle collar rim at top of shoe (z = +3.5) that hugs the bottom of the wide thigh!
-    collar_outer = sd_cylinder_z(x, y - 1.0, z - 3.5, 14.2, 4.2)
-    foot_outer = smin(shoe_pod, collar_outer, 2.5)
+    collar_outer = sd_cylinder_z(x, y - 0.8, z - 2.6, 11.2, 3.2)
+    foot_outer = smin(shoe_pod, collar_outer, 2.0)
 
-    # Deep concave ankle cup inside the raised collar rim (z = +6.8) so the wide thigh sits down inside the collar
-    collar_cup = sd_cylinder_z(x, y - 1.0, z - 6.8, 12.8, 3.2)
+    collar_cup = sd_cylinder_z(x, y - 0.8, z - 5.2, 10.1, 2.5)
     foot_outer = op_subtract(foot_outer, collar_cup)
 
-    # Exact flat bottom sole at z = -8.5 for rock-solid standing balance
-    sole_clip = z + 8.5
+    sole_clip = z + 6.5
     foot_outer = np.maximum(foot_outer, -sole_clip)
 
-    # Top Snap-In Ankle Socket (mates with thigh ankle_ball + 0-deg flat-standing detent slot)
-    socket_sphere = sd_sphere(x, y - 1.0, z - 1.5, 7.5)
-    socket_throat = sd_cylinder_z(x, y - 1.0, z - 4.5, 6.7, 3.5)
-    detent_slot_0 = sd_round_box(x, y - 1.0, z - 1.5, 8.0, 1.4, 2.5, 0.4)
-    detent_slot_stride = sd_round_box(x, y - 1.0, z - 1.5, 1.4, 8.0, 2.5, 0.4)
+    socket_sphere = sd_sphere(x, y - 0.8, z - 1.2, 6.1)
+    socket_throat = sd_cylinder_z(x, y - 0.8, z - 3.5, 5.4, 2.8)
+    detent_slot_0 = sd_round_box(x, y - 0.8, z - 1.2, 6.5, 1.1, 2.0, 0.3)
+    detent_slot_stride = sd_round_box(x, y - 0.8, z - 1.2, 1.1, 6.5, 2.0, 0.3)
     return op_subtract(
         foot_outer,
         op_union(op_union(socket_sphere, socket_throat), op_union(detent_slot_0, detent_slot_stride)),
@@ -500,8 +478,8 @@ def sdf_single_foot(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
 
 
 def sdf_feet_pair(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    left_foot = sdf_single_foot(x + 17.5, y, z)
-    right_foot = sdf_single_foot(x - 17.5, y, z)
+    left_foot = sdf_single_foot(x + 13.5, y, z)
+    right_foot = sdf_single_foot(x - 13.5, y, z)
     return op_union(left_foot, right_foot)
 
 
@@ -654,70 +632,70 @@ def render_mesh_to_image(
 
 
 def main() -> None:
-    print("Generating 8 watertight 3D-printable .STL files for RoboAssistant...")
+    print("Generating 8 watertight 3D-printable .STL files for RoboAssistant (135 mm / 13.5 cm Compact Edition)...")
     parts_spec = [
         (
             "1_head_shell.stl",
             "Head Shell (ST7789 + 48mm Speaker + INMP441 + PTT)",
             sdf_head_shell,
-            ((-45.0, 45.0), (-37.0, 37.0), (-41.0, 40.0)),
-            0.85,
+            ((-36.0, 36.0), (-29.0, 29.0), (-31.0, 31.0)),
+            0.70,
             (236, 240, 245),
         ),
         (
             "2_front_visor_bezel.stl",
             "Front Black Visor Bezel (1.3-inch ST7789 Frame)",
             sdf_front_visor,
-            ((-34.0, 34.0), (-28.0, 28.0), (-5.0, 4.0)),
-            0.65,
+            ((-28.0, 28.0), (-23.0, 23.0), (-4.0, 4.0)),
+            0.55,
             (32, 36, 44),
         ),
         (
             "3_top_ptt_button_cap.stl",
             "Top Circular PTT Button Cap (GPIO 1 Actuator)",
             sdf_top_button_cap,
-            ((-17.0, 17.0), (-17.0, 17.0), (-7.0, 6.0)),
-            0.55,
+            ((-14.0, 14.0), (-14.0, 14.0), (-6.0, 5.0)),
+            0.45,
             (130, 140, 152),
         ),
         (
             "4_torso_shell.stl",
-            "Chubby Torso + Click-Detent Hip Axles + SG90 Hip/Arm Bays",
+            "Compact Oval Torso + Click-Detent Hip Axles + ESP32-S3 Rails",
             sdf_torso_shell,
-            ((-43.0, 43.0), (-39.0, 39.0), (-23.0, 52.0)),
-            0.85,
+            ((-33.0, 33.0), (-29.0, 29.0), (-18.0, 39.0)),
+            0.70,
             (236, 240, 245),
         ),
         (
             "5_back_access_door.stl",
             "Snap-Fit Rear Service Door with Cooling Slots",
             sdf_back_door,
-            ((-30.0, 30.0), (-26.0, 26.0), (-6.0, 4.0)),
-            0.65,
+            ((-25.0, 25.0), (-21.0, 21.0), (-5.0, 4.0)),
+            0.55,
             (215, 222, 230),
         ),
         (
             "6_arms_left_and_right.stl",
             "Articulated Left & Right Movable Arms (Thumb + Curled Fingers)",
             sdf_arms_pair,
-            ((-36.0, 36.0), (-14.0, 14.0), (-27.0, 26.0)),
-            0.70,
+            ((-28.0, 28.0), (-11.0, 11.0), (-21.0, 20.0)),
+            0.60,
             (232, 236, 242),
         ),
         (
             "7_thighs_left_and_right.stl",
-            "Movable Hip-Pivot Thighs (0/25/90 deg Click-Detents + Ankle Ball)",
+            "Movable Hip-Pivot Thighs (0/90 deg Click-Detents + Ankle Ball)",
             sdf_thighs_pair,
-            ((-34.0, 34.0), (-17.0, 17.0), (-26.0, 29.0)),
-            0.70,
+            ((-26.0, 26.0), (-14.0, 14.0), (-21.0, 22.0)),
+            0.60,
             (232, 236, 242),
         ),
         (
             "8_feet_left_and_right.stl",
             "Movable Swivel/Tilt Shoes with Wraparound Ankle Collars",
             sdf_feet_pair,
-            ((-35.0, 35.0), (-28.0, 20.0), (-10.0, 10.0)),
-            0.70,
+            ((-28.0, 28.0), (-22.0, 16.0), (-8.0, 8.0)),
+            0.60,
             (236, 240, 245),
         ),
     ]
@@ -735,7 +713,7 @@ def main() -> None:
         )
         built_parts[fname] = (verts, faces, color, dims, desc)
 
-    # Assemble full robot in world coordinates for the 3D CAD Engineering Preview Sheet
+    # Assemble full robot in world coordinates for the 3D CAD Engineering Preview Sheet (Exact 135.0 mm tall!)
     feet_v, feet_f, _, _, _ = built_parts["8_feet_left_and_right.stl"]
     thighs_v, thighs_f, _, _, _ = built_parts["7_thighs_left_and_right.stl"]
     torso_v, torso_f, _, _, _ = built_parts["4_torso_shell.stl"]
@@ -743,54 +721,56 @@ def main() -> None:
     visor_v, visor_f, _, _, _ = built_parts["2_front_visor_bezel.stl"]
     btn_v, btn_f, _, _, _ = built_parts["3_top_ptt_button_cap.stl"]
 
-    # Feet sit on the ground at z = 0..16.2 mm
+    # Feet sit on the ground at z = 0..12.5 mm
     feet_world = feet_v.copy()
-    # Thighs sit 2.5 mm down inside the shoe's raised ankle collar rim (z = +1.8 mm -> zero skinny neck visible!)
+    # Thighs sit 2.0 mm down inside the shoe's raised ankle collar rim (z = +1.4 mm)
     thighs_world = thighs_v.copy()
-    thighs_world[:, 2] += 1.8
-    # Oval torso sits on top of the tall thigh pillars (z = +36.0 mm -> full 25 mm tall thighs + angled hip seam!)
+    thighs_world[:, 2] += 1.4
+    # Oval torso sits on top of the thigh pillars (z = +27.5 mm)
     torso_world = torso_v.copy()
-    torso_world[:, 2] += 36.0
+    torso_world[:, 2] += 27.5
 
-    # Position head on top of torso (z = +98.0 mm)
+    # Position head on top of torso (z = +74.2 mm)
     head_world = head_v.copy()
-    head_world[:, 2] += 98.0
+    head_world[:, 2] += 74.2
 
-    # Rotate visor 90 deg around X to sit on the front of the head (y = -32.0 mm)
+    # Rotate visor 90 deg around X to sit on the front of the head (y = -24.5 mm)
     visor_world = np.zeros_like(visor_v)
     visor_world[:, 0] = visor_v[:, 0]
-    visor_world[:, 1] = -visor_v[:, 2] - 32.0
-    visor_world[:, 2] = visor_v[:, 1] + 98.0 + 39.0
+    visor_world[:, 1] = -visor_v[:, 2] - 24.5
+    visor_world[:, 2] = visor_v[:, 1] + 74.2 + 29.0
 
-    # Place button cap at top of head + glowing cyan LED ring collar
+    # Place button cap at top of head -> exact top of button reaches z = 135.0 mm (13.5 cm)!
     btn_world = btn_v.copy()
-    btn_world[:, 2] += 98.0 + 73.0
+    btn_world[:, 2] += 135.0 - btn_world[:, 2].max()
 
     halo_v, halo_f = build_mesh_from_sdf(
         lambda x, y, z: op_subtract(
-            sd_cylinder_z(x, y, z, 15.8, 1.0),
-            sd_cylinder_z(x, y, z, 13.8, 2.0),
+            sd_cylinder_z(x, y, z, 12.2, 0.8),
+            sd_cylinder_z(x, y, z, 10.6, 1.6),
         ),
-        ((-18.0, 18.0), (-18.0, 18.0), (-2.0, 2.0)),
-        step=0.6,
+        ((-14.0, 14.0), (-14.0, 14.0), (-2.0, 2.0)),
+        step=0.5,
     )
-    halo_v[:, 2] += 98.0 + 75.5
+    halo_v[:, 2] += 74.2 + 56.5
 
-    # Split left & right arms and place flush against upper oval shoulders (x = +/-38.5, z = +45.5)
+    # Split left & right arms and place flush against upper oval shoulders (x = +/-29.6, z = +34.5)
     arm_l_v = sdf_single_arm_mesh(-1.0)
     arm_r_v = sdf_single_arm_mesh(+1.0)
 
-    # Simulated 1.3" ST7789 screen glass + glowing cyan ring-eyes, arched brows & cute smile (matching reference image!)
+    total_height_mm = max(v[:, 2].max() for v in (feet_world, thighs_world, torso_world, head_world, btn_world))
+    print(f"  [OK] Total Assembled Standing Height: {total_height_mm:.1f} mm ({total_height_mm / 10.0:.2f} cm / {total_height_mm / 25.4:.2f} inches)")
+
+    # Simulated 1.3" ST7789 screen glass + glowing cyan ring-eyes, arched brows & cute smile
     scr_v, scr_f = build_mesh_from_sdf(
-        lambda x, y, z: sd_round_box(x, y, z, 13.5, 1.0, 13.5, 1.0),
+        lambda x, y, z: sd_round_box(x, y, z, 13.3, 1.0, 13.3, 1.0),
         ((-15.0, 15.0), (-3.0, 3.0), (-15.0, 15.0)),
-        step=0.8,
+        step=0.7,
     )
-    scr_v[:, 1] -= 31.0
-    scr_v[:, 2] += 98.0 + 25.0
+    scr_v[:, 1] -= 23.6
+    scr_v[:, 2] += 74.2 + 16.0
 
     def sdf_cute_face(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-        # Left & right glowing cyan ring eyes (R_outer=5.2, R_inner=2.4)
         eye_l = op_subtract(
             sd_cylinder_y(x + 6.5, y, z - 0.5, 5.2, 1.0),
             sd_cylinder_y(x + 6.5, y, z - 0.5, 2.3, 2.0),
@@ -799,7 +779,6 @@ def main() -> None:
             sd_cylinder_y(x - 6.5, y, z - 0.5, 5.2, 1.0),
             sd_cylinder_y(x - 6.5, y, z - 0.5, 2.3, 2.0),
         )
-        # Cute arched eyebrows above each eye
         brow_l = np.maximum(
             op_subtract(
                 sd_cylinder_y(x + 6.5, y, z - 2.2, 6.8, 1.0),
@@ -814,7 +793,6 @@ def main() -> None:
             ),
             -(z - 5.2),
         )
-        # Small curved smile arc between/below the eyes
         smile = np.maximum(
             op_subtract(
                 sd_cylinder_y(x, y, z + 3.2, 3.2, 1.0),
@@ -829,8 +807,8 @@ def main() -> None:
         ((-15.0, 15.0), (-3.0, 3.0), (-10.0, 12.0)),
         step=0.45,
     )
-    eye_v[:, 1] -= 32.3
-    eye_v[:, 2] += 98.0 + 28.5
+    eye_v[:, 1] -= 24.8
+    eye_v[:, 2] += 74.2 + 19.5
 
     assembled_meshes = [
         (feet_world, feet_f, (238, 242, 247)),
@@ -852,8 +830,8 @@ def main() -> None:
         img_h=860,
         yaw_deg=-24.0,
         pitch_deg=12.0,
-        scale=3.70,
-        center_offset=(0.0, 0.0, 88.0),
+        scale=4.85,
+        center_offset=(0.0, 0.0, 67.5),
     )
 
     sheet = Image.new("RGB", (1500, 860), (14, 18, 26))
@@ -862,14 +840,14 @@ def main() -> None:
 
     # Right-side 2x4 grid of all 8 individual printable .STL parts
     grid_positions = [
-        ("1_head_shell.stl", 720, 35, 1.85, (0.0, 0.0, 36.0)),
-        ("2_front_visor_bezel.stl", 1105, 35, 2.4, (0.0, 0.0, 2.0)),
-        ("3_top_ptt_button_cap.stl", 720, 235, 3.3, (0.0, 0.0, 4.0)),
-        ("4_torso_shell.stl", 1105, 235, 1.85, (0.0, 0.0, 34.0)),
-        ("5_back_access_door.stl", 720, 435, 2.4, (0.0, 0.0, 2.0)),
-        ("6_arms_left_and_right.stl", 1105, 435, 1.95, (0.0, 0.0, 24.0)),
-        ("7_thighs_left_and_right.stl", 720, 635, 2.1, (0.0, 0.0, 22.0)),
-        ("8_feet_left_and_right.stl", 1105, 635, 2.1, (0.0, 0.0, 8.0)),
+        ("1_head_shell.stl", 720, 35, 2.35, (0.0, 0.0, 28.0)),
+        ("2_front_visor_bezel.stl", 1105, 35, 2.9, (0.0, 0.0, 2.0)),
+        ("3_top_ptt_button_cap.stl", 720, 235, 4.0, (0.0, 0.0, 3.0)),
+        ("4_torso_shell.stl", 1105, 235, 2.35, (0.0, 0.0, 26.0)),
+        ("5_back_access_door.stl", 720, 435, 3.0, (0.0, 0.0, 2.0)),
+        ("6_arms_left_and_right.stl", 1105, 435, 2.5, (0.0, 0.0, 18.0)),
+        ("7_thighs_left_and_right.stl", 720, 635, 2.6, (0.0, 0.0, 17.0)),
+        ("8_feet_left_and_right.stl", 1105, 635, 2.6, (0.0, 0.0, 6.5)),
     ]
 
     for fname, gx, gy, gscale, goff in grid_positions:
@@ -893,12 +871,12 @@ def main() -> None:
 
     draw.text(
         (24, 18),
-        "ROBOASSISTANT 3D-PRINTABLE CAD ASSEMBLY (180 mm Tall | 8 Watertight .STL Parts | Oval Belly + Movable Limbs)",
+        "ROBOASSISTANT 3D-PRINTABLE CAD ASSEMBLY (135 mm / 13.5 cm Compact Tabletop Size | 8 Watertight .STL Parts)",
         fill=(0, 225, 255),
     )
     draw.text(
         (24, 825),
-        "Option B Print-Optimized (2.8mm Lightweight Shell + 45-deg Internal Teardrop) | VSA TechnoServices Nagpur Ready",
+        "Exact Height: 135.0 mm (13.5 cm / 5.3 in) | ~70g PLA (~Rs.220-290 at VSA TechnoServices Nagpur) | 1:1 Hardware Mounts",
         fill=(170, 185, 205),
     )
 
@@ -911,9 +889,9 @@ def sdf_single_arm_mesh(side: float) -> Tuple[np.ndarray, np.ndarray]:
     def fn(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
         return sdf_single_arm(x, y, z, side)
 
-    v, f = build_mesh_from_sdf(fn, ((-15.0, 15.0), (-12.0, 12.0), (-27.0, 26.0)), step=0.75)
-    v[:, 0] += -side * 38.2
-    v[:, 2] += 45.0
+    v, f = build_mesh_from_sdf(fn, ((-12.0, 12.0), (-10.0, 10.0), (-21.0, 20.0)), step=0.65)
+    v[:, 0] += -side * 29.5
+    v[:, 2] += 34.2
     return v, f
 
 
