@@ -110,6 +110,44 @@ This document is the single source of truth for the **RoboAssistant** hardware w
      |         VCC | <--- External 5V 2A DC Supply (+) (NEVER laptop USB!)
      |         GND | ---> Common GND (External Supply GND tied to ESP32 GND)
      +-------------+
+
+========================================================================================================
+             6. HOST & GATEWAY CONNECTIONS: PHYSICAL USB-C VS WIRELESS WI-FI RF LINK
+========================================================================================================
+
+  [1] Physical Wired Connection: USB-C Cable (Power & Flashing)
+      +---------------------+                    +------------------------------------+
+      |  Laptop / PC Host   | =================> |  ESP32-S3 Board USB-C "USB" Port   |
+      |  (5V 1A+ USB Port)  |   USB-C D+/D- & 5V |  (GPIO 19/20 Native USB CDC)       |
+      +---------------------+                    +------------------------------------+
+      * Delivers 5.0V DC to the breadboard power rail.
+      * Transmits PlatformIO firmware flashing binaries and serial logs.
+
+  [2] Wireless Over-the-Air Connection: Python Gateway Server (Zero Physical Wires!)
+      +----------------------------------------+
+      |      ESP32-S3 Onboard PCB Antenna      |
+      |   (Meandered copper trace on module)   |
+      +----------------------------------------+
+                          |
+             ((( 2.4 GHz Wi-Fi RF Packets )))
+                          |
+                          v
+      +----------------------------------------+
+      |       Home / Office Wi-Fi Router       |
+      +----------------------------------------+
+            |                            |
+       (LAN TCP/IP)                 (WAN / TLS)
+            |                            |
+            v                            v
+  +--------------------+       +------------------------------------+
+  | Local Development: |       | Cloud Production:                  |
+  | Laptop running     |       | AWS EC2 t4g.small behind Caddy     |
+  | 'gateway/app.py'   |       | https://api.chitt.online/talk      |
+  | http://<ip>:8000   |       +------------------------------------+
+  +--------------------+
+  * THE GATEWAY IS 100% SOFTWARE! It is NOT a physical electronic chip on the breadboard.
+  * Audio (16 kHz PCM) streams from the ESP32-S3 over Wi-Fi to the Gateway.
+  * The Gateway talks to Cloud AI (Gemini / Chit / OpenAI) and streams synthesized voice back.
 ```
 
 ---
@@ -148,6 +186,8 @@ This document is the single source of truth for the **RoboAssistant** hardware w
 | **[Phase 5]** | `Servo PWM` | Orange | `GPIO 18` | LEDC PWM | 3.3V Logic | Waving Arm Servo Control (SG90) |
 | **[Phase 5]** | `Servo VCC` | Red | Ext +5V | External PSU | **5.0V 2A** | Strictly external supply; NEVER from USB! |
 | **[Phase 5]** | `Servo GND` | Black | Ext GND | External PSU | 0V | Tie Ext GND to ESP32 GND |
+| **Host PC/Laptop** | `USB-C Cable` | Black/White | `USB` Port | Native USB CDC | **5.0V / D+/D-** | Connects to ESP32-S3 `USB` port for power & flashing |
+| **Python Gateway** | `Over-The-Air` | Wireless RF | PCB Antenna | 2.4 GHz Wi-Fi | 802.11 b/g/n | **ZERO WIRES!** Runs on laptop or AWS EC2 over Wi-Fi |
 
 ---
 
