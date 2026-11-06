@@ -346,8 +346,7 @@ RoboAssistant/
     ├── .env.example                 # Template showing what goes inside ~/.robo_secrets/gateway.env
     ├── test_gateway.py              # Offline unit & fault-injection test suite (auth, odd-byte, 504/502, mid-stream, Chit)
     ├── test_live_gemini.py          # Live end-to-end test using your real Gemini key (plays voice on laptop speakers)
-    ├── Containerfile                # Lightweight Python 3.13 container build file for AWS EC2 deployment
-    └── DEPLOY.md                    # Step-by-step instructions to deploy alongside Chit behind Caddy on AWS EC2
+    └── DEPLOY.md                    # ESP32-S3 onboard deployment, OTA update guide, and local testbench reference
 ```
 
 ### Detailed File Reference Table
@@ -375,8 +374,7 @@ RoboAssistant/
 | [`gateway/adapters.py`](gateway/adapters.py) | Implements `GeminiSTT`, `GeminiLLM`, `GeminiTTS` (`gemini-3.1-flash-lite` + `gemini-3.8-flash-tts`), `ChitLLM` (`POST /chat` with `X-API-Key`, `session_id` reuse, and `429` exponential backoff), `OpenAICompat*`, and `Mock*` adapters. |
 | [`gateway/test_gateway.py`](gateway/test_gateway.py) | Automated test suite verifying auth rejection (`401`), `/echo` odd-chunk streaming, `<400 ms` short-press filtering (`204`), per-device session isolation, odd-byte input alignment, upstream `504`/`502` handling, mid-stream LLM/TTS fault recovery, and the `ChitLLM` contract. |
 | [`gateway/test_live_gemini.py`](gateway/test_live_gemini.py) | Live end-to-end test that calls Google's Gemini API with your key, plays the synthesized 24 kHz robot voice on your laptop speakers, and tests the full HTTP `POST /talk` pipeline. |
-| [`gateway/Containerfile`](gateway/Containerfile) | Docker/Podman build file for running the Gateway as a non-root user on your AWS EC2 `t4g.small` instance. |
-| [`gateway/DEPLOY.md`](gateway/DEPLOY.md) | Step-by-step guide for local laptop execution and AWS EC2 (`t4g.small`) Docker + Caddy deployment alongside **Chit**. |
+| [`gateway/DEPLOY.md`](gateway/DEPLOY.md) | Guide for ESP32-S3 firmware flashing, Wi-Fi OTA releases, live WebConfig, and local dev testbench. |
 
 ---
 
@@ -578,4 +576,4 @@ When `robot_main` boots, it prints its local Config API address on Serial (e.g.,
      -d '{"factory_reset":true}'
    ```
 
-For deploying the optional Voice Gateway onto your AWS EC2 `t4g.small` instance alongside **Chit** behind Caddy, see [`gateway/DEPLOY.md`](gateway/DEPLOY.md).
+For firmware flashing via PlatformIO, Wi-Fi OTA upgrades, live WebConfig, and optional local dev testing, see [`gateway/DEPLOY.md`](gateway/DEPLOY.md).

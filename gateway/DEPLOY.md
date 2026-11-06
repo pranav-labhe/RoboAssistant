@@ -1,89 +1,101 @@
-# 🚀 Voice Gateway — Local & AWS EC2 (`t4g.small`) Deployment Guide
+# 🚀 ESP32-S3 Voice Robot — Deployment & Local Testbench Guide
 
-## 1. Local Laptop Mode (Default for Breadboard Gates 6–12)
-
-1. Your outside-repo secrets file is already configured at:
-   * `C:\Users\DELL\.robo_secrets\gateway.env` (loaded automatically by `gateway/app.py`)
-   * `C:\Users\DELL\.robo_secrets\robot_secrets.h` (included automatically by PlatformIO via `-IC:/Users/DELL/.robo_secrets`)
-2. Start the Gateway on your laptop:
-   ```powershell
-   cd c:\Robo\gateway
-   uvicorn app:app --host 0.0.0.0 --port 8002
-   ```
-3. Verify health from PowerShell:
-   ```powershell
-   curl.exe -i http://127.0.0.1:8002/health -H "Authorization: Bearer <YOUR_GATEWAY_BEARER_TOKEN>"
-   ```
+> [!NOTE]
+> **Architecture Reality (100% Onboard)**:
+> The tabletop voice robot runs **entirely onboard** within the ESP32-S3 microcontroller ([`src/robot_main/direct_mode.h`](../src/robot_main/direct_mode.h)). It captures audio from the INMP441 mic, connects directly to Google Gemini over Wi-Fi using verified TLS, decodes 24 kHz speech in 8 MB Octal PSRAM, and plays it out the MAX98357A speaker.
+> 
+> **There is NO external server, NO Docker container, and NO cloud VM required.**
 
 ---
 
-## 2. AWS EC2 (`t4g.small` ARM64, 2 GiB RAM) Co-Deployment Alongside Chit
+## 1. Primary Deployment: USB-C Firmware Flashing (PlatformIO)
 
-Your EC2 instance (`15.252.205.123` / `api.chitt.online`) runs **Chit** (`pranav.chit.api` on `127.0.0.1:8000` and `pranav.chit.ui` on `127.0.0.1:8501`) behind **Caddy v2.11.4**.
+Deployment to a microcontroller is called **Flashing**. The Xtensa GCC toolchain compiles the C++ codebase into machine code, and `esptool.py` writes it directly into the ESP32-S3's 16 MB onboard Flash memory.
 
-### Step A — Verify Swap Is Active on EC2 (2 GiB RAM Guardrail)
-```bash
-free -m
-# If Swap shows 0B, create a 2 GiB swapfile:
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+### Step-by-Step Bring-Up & Flashing
+
+1. **Connect the ESP32-S3**:
+   * Plug your ESP32-S3 board into your PC using a high-quality USB-C data cable (plug into the port labeled **USB** or **UART**).
+2. **Initial Hardware Bring-Up (Gate 1 Diagnostics)**:
+   * Run the Gate 1 self-test to verify the chip, 16 MB Flash, and 8 MB Octal PSRAM integrity:
+     ```powershell
+     pio run -e gate1_board -t upload
+     pio device monitor -b 115200
+     ```
+3. **Deploy the Production Voice Robot Firmware**:
+   * Build and flash the master dual-core robot firmware:
+     ```powershell
+     pio run -e robot_main -t upload
+     ```
+4. **Monitor Startup & Wi-Fi Connection**:
+   * Open the serial console to watch the boot sequence, NTP clock synchronization, and display initialization:
+     ```powershell
+     pio device monitor -b 115200
+     ```
+
+---
+
+## 2. Release Upgrades: Over-The-Air (OTA) Updates
+
+Once your robot is fully assembled inside its desktop chassis, you do not need to open the enclosure or attach a USB cable to deploy updates.
+
+### Dual-Slot A/B Partitioning
+The ESP32-S3 16 MB Flash memory is partitioned into two independent application slots:
+* **`ota_0`**: Active firmware slot.
+* **`ota_1`**: Inactive staging slot for the next release.
+
+### How Wireless Releases Work
+1. Compile the new release in PlatformIO to produce `firmware.bin`.
+2. Push the binary to the robot over your home Wi-Fi network (or upload it via the robot's onboard Web UI).
+3. The ESP32-S3 writes the new code into the inactive slot and verifies the SHA-256 checksum.
+4. The bootloader marks the new slot active and restarts the chip.
+
+> [!TIP]
+> **Anti-Bricking Guardrail**:
+> If a newly deployed release crashes or fails to establish a Wi-Fi connection within 10 seconds of boot, the ESP32-S3 hardware Watchdog Timer (WDT) triggers an automatic rollback to the previous known-good partition. The robot cannot be bricked over the air.
+
+---
+
+## 3. Live Configuration Updates (Zero Re-Flashing)
+
+For routine settings changes, you never need to recompile or reflash the firmware:
+
+* **Onboard WebConfig Endpoint**: The ESP32-S3 hosts its own authenticated configuration server at `http://<robot-ip>/config`.
+* **Instant NVS Persistence**: You can update your Wi-Fi credentials, switch Gemini API keys, or select a different robot voice from any web browser or terminal command:
+  ```powershell
+  curl.exe -X POST http://<robot-ip>/config `
+    -H "Authorization: Bearer <YOUR_ROBOT_BEARER_TOKEN>" `
+    -H "Content-Type: application/json" `
+    -d '{"voice":"Puck"}'
+  ```
+* Changes are committed directly to internal Non-Volatile Storage (NVS) in milliseconds without interrupting normal operation.
+
+---
+
+## 4. Optional Local Development Testbench (Laptop Only)
+
+The Python scripts in this `gateway/` folder are **strictly an optional offline developer testbench**. They allow you to test API keys, simulate audio streaming, and verify voice responses on your laptop speakers before physical hardware arrives.
+
+### Testing Your Gemini API Key & Audio Playback
+You can test Gemini's live speech synthesis directly on your computer:
+1. Ensure your API key is in `~/.robo_secrets/gateway.env`:
+   ```ini
+   GEMINI_API_KEY=AIzaSy...
+   ```
+2. Run the live voice synthesis test:
+   ```powershell
+   cd c:\Robo\gateway
+   python -m pip install -r requirements.txt
+   python test_live_gemini.py
+   ```
+   *This will synthesize a response and play it out of your laptop's speakers at 24 kHz.*
+
+### Running the Offline Fault-Injection Suite
+To verify network error recovery (e.g. 504 timeouts, odd-byte audio chunk alignments, auth rejections):
+```powershell
+cd c:\Robo\gateway
+pytest test_gateway.py
 ```
 
-### Step B — Build & Run the Gateway Container with a 192 MB Memory Cap
-Copy `c:\Robo\gateway` to `/home/ubuntu/robo-gateway` on EC2, create `/home/ubuntu/.robo_secrets/gateway.env` (`chmod 600`), and run:
-
-```bash
-cd /home/ubuntu/robo-gateway
-docker build -f Containerfile -t pranav.robo.gateway:latest .
-
-docker run -d \
-  --name pranav.robo.gateway \
-  --restart unless-stopped \
-  --memory=192m \
-  --memory-swap=384m \
-  --env-file /home/ubuntu/.robo_secrets/gateway.env \
-  -p 127.0.0.1:8002:8002 \
-  pranav.robo.gateway:latest
-```
-
-Measure actual memory consumption alongside Chit:
-```bash
-docker stats --no-stream
-```
-
-### Step C — Add `/voice/*` Route to `/etc/caddy/Caddyfile`
-Edit `/etc/caddy/Caddyfile` inside your `api.chitt.online` block so `/voice/*` proxies to port `8002` with unbuffered streaming (`flush_interval -1`):
-
-```caddyfile
-api.chitt.online {
-    # Voice Robot Gateway (/voice/health, /voice/echo, /voice/talk)
-    handle_path /voice/* {
-        reverse_proxy 127.0.0.1:8002 {
-            flush_interval -1
-        }
-    }
-
-    # Existing Chit API routes
-    handle {
-        reverse_proxy 127.0.0.1:8000
-    }
-}
-```
-
-Reload Caddy with zero downtime:
-```bash
-sudo systemctl reload caddy
-```
-
-### Step D — Point the Robot to EC2 HTTPS
-In `C:\Users\DELL\.robo_secrets\robot_secrets.h`, set:
-```cpp
-#define GATEWAY_BASE_URL "https://api.chitt.online/voice"
-```
-When ready to switch the robot's brain from Gemini to **Chit**, change one line in `gateway.env`:
-```ini
-LLM_PROVIDER=chit
-```
+> [!NOTE]
+> The optional local test server (`uvicorn app:app --port 8002`) can be run on your laptop for testing audio loopback over HTTP, but it is **never required** for the robot, which runs completely self-contained.
