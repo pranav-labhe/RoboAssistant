@@ -112,10 +112,10 @@ This document is the single source of truth for the **RoboAssistant** hardware w
      +-------------+
 
 ========================================================================================================
-             6. HOST & GATEWAY CONNECTIONS: PHYSICAL USB-C VS WIRELESS WI-FI RF LINK
+             6. HOST & CLOUD CONNECTIONS: DIRECT ON-CHIP MODE (ZERO EXTERNAL SERVER!)
 ========================================================================================================
 
-  [1] Physical Wired Connection: USB-C Cable (Power & Flashing)
+  [1] Physical Wired Connection: USB-C Cable (Power & Flashing Only)
       +---------------------+                    +------------------------------------+
       |  Laptop / PC Host   | =================> |  ESP32-S3 Board USB-C "USB" Port   |
       |  (5V 1A+ USB Port)  |   USB-C D+/D- & 5V |  (GPIO 19/20 Native USB CDC)       |
@@ -123,31 +123,31 @@ This document is the single source of truth for the **RoboAssistant** hardware w
       * Delivers 5.0V DC to the breadboard power rail.
       * Transmits PlatformIO firmware flashing binaries and serial logs.
 
-  [2] Wireless Over-the-Air Connection: Python Gateway Server (Zero Physical Wires!)
+  [2] Wireless Over-the-Air Connection: Direct On-Chip Cloud AI (NO External Server Needed!)
       +----------------------------------------+
       |      ESP32-S3 Onboard PCB Antenna      |
       |   (Meandered copper trace on module)   |
       +----------------------------------------+
                           |
-             ((( 2.4 GHz Wi-Fi RF Packets )))
+             ((( 2.4 GHz Wi-Fi Radio Waves )))
                           |
                           v
       +----------------------------------------+
       |       Home / Office Wi-Fi Router       |
       +----------------------------------------+
-            |                            |
-       (LAN TCP/IP)                 (WAN / TLS)
-            |                            |
-            v                            v
-  +--------------------+       +------------------------------------+
-  | Local Development: |       | Cloud Production:                  |
-  | Laptop running     |       | AWS EC2 t4g.small behind Caddy     |
-  | 'gateway/app.py'   |       | https://api.chitt.online/talk      |
-  | http://<ip>:8000   |       +------------------------------------+
-  +--------------------+
-  * THE GATEWAY IS 100% SOFTWARE! It is NOT a physical electronic chip on the breadboard.
-  * Audio (16 kHz PCM) streams from the ESP32-S3 over Wi-Fi to the Gateway.
-  * The Gateway talks to Cloud AI (Gemini / Chit / OpenAI) and streams synthesized voice back.
+                          |
+                     (HTTPS / TLS)
+                          |
+                          v
+      +-----------------------------------------------------------------------+
+      |               GOOGLE GEMINI CLOUD API (DIRECT ON-CHIP)                |
+      |             https://generativelanguage.googleapis.com                 |
+      +-----------------------------------------------------------------------+
+      * ZERO EXTERNAL SERVER! No laptop gateway, no AWS EC2, and no Docker!
+      * The ESP32-S3 uses its 8 MB Octal PSRAM to encode audio, call Gemini directly,
+        receive the synthesized voice, and play it directly through the speaker.
+      * Optional Gateway Mode: An optional secondary mode (`ROBOT_DEFAULT_MODE = "gateway"`)
+        remains available if a developer ever wants to run `gateway/app.py` on a server.
 ```
 
 ---
@@ -187,7 +187,8 @@ This document is the single source of truth for the **RoboAssistant** hardware w
 | **[Phase 5]** | `Servo VCC` | Red | Ext +5V | External PSU | **5.0V 2A** | Strictly external supply; NEVER from USB! |
 | **[Phase 5]** | `Servo GND` | Black | Ext GND | External PSU | 0V | Tie Ext GND to ESP32 GND |
 | **Host PC/Laptop** | `USB-C Cable` | Black/White | `USB` Port | Native USB CDC | **5.0V / D+/D-** | Connects to ESP32-S3 `USB` port for power & flashing |
-| **Python Gateway** | `Over-The-Air` | Wireless RF | PCB Antenna | 2.4 GHz Wi-Fi | 802.11 b/g/n | **ZERO WIRES!** Runs on laptop or AWS EC2 over Wi-Fi |
+| **Direct Cloud AI** | `Over-The-Air` | Wireless RF | PCB Antenna | 2.4 GHz Wi-Fi | 802.11 b/g/n | **ZERO SERVER!** Calls Google Gemini API directly over Wi-Fi (No Gateway needed) |
+| *[Optional Gateway]*| `Over-The-Air` | Wireless RF | PCB Antenna | 2.4 GHz Wi-Fi | 802.11 b/g/n | Optional alternative: connects to `gateway/app.py` if mode="gateway" |
 
 ---
 
