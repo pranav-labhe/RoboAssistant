@@ -122,66 +122,66 @@ def op_subtract(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 # ============================================================================
 # Part 1: Compact Rounded Squircle Head Shell (`1_head_shell.stl` — 135mm Tall Kit)
-#   - Outer: 68 mm (X) x 58 mm (Y depth) x 55 mm (Z height), 9.0 mm fillet
-#   - Inner cavity: 63.2 x 53.2 x 50.6 mm -> 100% fits 48.0 mm Speaker + 1.3" ST7789!
+#   - Outer: 70 mm (X) x 60 mm (Y depth) x 57 mm (Z height), 8.5 mm fillet
+#   - Inner cavity: 65.2 x 55.2 x 53.4 mm -> 100% fits 52x52mm Square-Flange SUNVOICE 3740 Speaker!
 #   - Built-in Snap-Retention Clips for:
 #       1) 1.3" ST7789 (35.5x39mm U-channel rails + top snap-latch + bottom cradle)
-#       2) Electrobot 48mm Speaker (Ø48.6mm collar + 3 overhanging spring snap-clips)
+#       2) SUNVOICE 3740 52x52mm Square-Flange Speaker (53.2x53.2mm square pocket + 3 spring snap-clips)
 #       3) INMP441 Mic (14.4x10.4mm pinch-clip pocket + acoustic baffle)
 #       4) 6x6mm Tactile Switch (6.3x6.3mm 4-wall snap pocket with retention nibs)
-#       5) 31.5 x 26.0 mm Stadium Neck Spine Slot so 65mm ESP32-S3 rises freely!
+#       5) 29.8 x 16.0 mm Stadium Neck Spine Slot so 65mm ESP32-S3 rises freely!
 # ============================================================================
 
 
 def sdf_head_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    # 1. Outer & inner rounded squircle shell (Z centered at 0 -> -27.5..+27.5 = 55 mm tall)
-    outer = sd_round_box(x, y, z, 34.0, 29.0, 27.5, 9.0)
-    inner = sd_round_box(x, y, z, 31.6, 26.6, 25.3, 7.0)
+    # 1. Outer & inner rounded squircle shell (Z centered at 0 -> -28.5..+28.5 = 57 mm tall)
+    outer = sd_round_box(x, y, z, 35.0, 30.0, 28.5, 8.5)
+    inner = sd_round_box(x, y, z, 32.6, 27.6, 26.7, 6.5)
     shell = op_subtract(outer, inner)
 
-    # 2. Front visor recess (shallow 1.0 mm pocket on y = -29.0 front face, leaving 1.4 mm solid backing wall)
-    visor_recess = sd_round_box(x, y + 29.0, z - 0.5, 24.0, 1.0, 19.0, 5.5)
+    # 2. Front visor recess (shallow 1.0 mm pocket on y = -30.0 front face, leaving 1.4 mm solid backing wall)
+    visor_recess = sd_round_box(x, y + 30.0, z - 0.5, 24.0, 1.0, 19.0, 5.5)
     shell = op_subtract(shell, visor_recess)
 
     # 3. 1.3" ST7789 240x240 IPS Display Window (exact 26.6 x 26.6 mm 1:1 hardware through-cut!)
-    tft_window = sd_round_box(x, y + 27.8, z - 0.5, 13.3, 3.5, 13.3, 2.5)
+    tft_window = sd_round_box(x, y + 28.8, z - 0.5, 13.3, 3.5, 13.3, 2.5)
     shell = op_subtract(shell, tft_window)
 
     # Built-in ST7789 U-Channel Guide Rails + Bottom Ledge + Top Snap-Latch Clip (holds 35.5 x 39.0 mm PCB)
     left_u_rail = op_subtract(
-        sd_round_box(x + 18.8, y + 24.4, z - 0.5, 2.2, 2.4, 19.8, 0.3),
-        sd_round_box(x + 17.4, y + 24.6, z - 0.5, 1.6, 1.1, 20.5, 0.2),
+        sd_round_box(x + 18.8, y + 25.4, z - 0.5, 2.2, 2.4, 19.8, 0.3),
+        sd_round_box(x + 17.4, y + 25.6, z - 0.5, 1.6, 1.1, 20.5, 0.2),
     )
     right_u_rail = op_subtract(
-        sd_round_box(x - 18.8, y + 24.4, z - 0.5, 2.2, 2.4, 19.8, 0.3),
-        sd_round_box(x - 17.4, y + 24.6, z - 0.5, 1.6, 1.1, 20.5, 0.2),
+        sd_round_box(x - 18.8, y + 25.4, z - 0.5, 2.2, 2.4, 19.8, 0.3),
+        sd_round_box(x - 17.4, y + 25.6, z - 0.5, 1.6, 1.1, 20.5, 0.2),
     )
-    bottom_ledge = sd_round_box(x, y + 24.4, z + 20.2, 19.0, 2.4, 1.5, 0.3)
-    top_snap_clip = sd_round_box(x, y + 23.6, z - 20.2, 8.0, 2.8, 1.3, 0.4)
+    bottom_ledge = sd_round_box(x, y + 25.4, z + 20.2, 19.0, 2.4, 1.5, 0.3)
+    top_snap_clip = sd_round_box(x, y + 24.6, z - 20.2, 8.0, 2.8, 1.3, 0.4)
     rails = np.maximum(
         op_union(op_union(left_u_rail, right_u_rail), op_union(bottom_ledge, top_snap_clip)),
         outer,
     )
     shell = op_union(shell, rails)
 
-    # 4. Side Speaker Grille ("Ears" at x = +/-34) + Internal Ø48.6 mm Collar & 3 Snap-Retention Clips
-    ear_boss_r = sd_cylinder_x(x - 33.4, y, z, 16.2, 1.2)
-    ear_boss_l = sd_cylinder_x(x + 33.4, y, z, 16.2, 1.2)
-    ear_ring_cut_r = sd_cylinder_x(x - 34.4, y, z, 14.5, 0.9)
-    ear_ring_cut_l = sd_cylinder_x(x + 34.4, y, z, 14.5, 0.9)
+    # 4. Side Speaker Grille ("Ears" at x = +/-35) + Internal 53.2x53.2mm Square-Flange SUNVOICE 3740 Cradle
+    ear_boss_r = sd_cylinder_x(x - 34.4, y, z, 16.5, 1.2)
+    ear_boss_l = sd_cylinder_x(x + 34.4, y, z, 16.5, 1.2)
+    ear_ring_cut_r = sd_cylinder_x(x - 35.4, y, z, 14.8, 0.9)
+    ear_ring_cut_l = sd_cylinder_x(x + 35.4, y, z, 14.8, 0.9)
     shell = op_union(shell, op_union(ear_boss_r, ear_boss_l))
     shell = op_subtract(shell, op_union(ear_ring_cut_r, ear_ring_cut_l))
 
-    # Internal Ø48.6 mm ID retention collar on Right Ear (shifted y = +2.2 mm behind ST7789 PCB!)
-    spk_collar_outer = sd_cylinder_x(x - 29.0, y - 2.2, z, 26.2, 3.2)
-    spk_collar_inner = sd_cylinder_x(x - 29.0, y - 2.2, z, 24.3, 4.2)
-    spk_collar = op_subtract(spk_collar_outer, spk_collar_inner)
-    # 3 overhanging spring snap-clips on the inner rim of the speaker collar (locks 48mm speaker frame!)
-    spk_clip_top = sd_round_box(x - 26.3, y - 2.2, z - 23.8, 1.2, 4.5, 1.4, 0.3)
-    spk_clip_bf = sd_round_box(x - 26.3, y + 18.2, z + 12.0, 1.2, 1.4, 4.5, 0.3)
-    spk_clip_br = sd_round_box(x - 26.3, y - 22.6, z + 12.0, 1.2, 1.4, 4.5, 0.3)
+    # Internal 53.2 x 53.2 mm Rounded-Square Frame + 3 Overhanging Snap-Clips for SUNVOICE 3740 (52x52x3mm flange)
+    spk_sq_outer = sd_round_box(x - 29.8, y - 0.8, z, 3.2, 28.0, 28.0, 6.0)
+    spk_sq_inner = sd_round_box(x - 29.8, y - 0.8, z, 4.2, 26.6, 26.6, 5.0)
+    spk_collar = op_subtract(spk_sq_outer, spk_sq_inner)
+    # 3 overhanging spring snap-clips at x = +27.2 mm (locks the 3.0mm-thick 52x52mm square metal flange!)
+    spk_clip_top = sd_round_box(x - 27.2, y - 0.8, z - 25.8, 1.2, 8.0, 1.4, 0.3)
+    spk_clip_bot = sd_round_box(x - 27.2, y - 0.8, z + 25.8, 1.2, 8.0, 1.4, 0.3)
+    spk_clip_rear = sd_round_box(x - 27.2, y - 26.6, z, 1.2, 1.4, 8.0, 0.3)
     spk_assy = np.maximum(
-        op_union(spk_collar, op_union(spk_clip_top, op_union(spk_clip_bf, spk_clip_br))),
+        op_union(spk_collar, op_union(spk_clip_top, op_union(spk_clip_bot, spk_clip_rear))),
         outer,
     )
     shell = op_union(shell, spk_assy)
@@ -195,23 +195,23 @@ def sdf_head_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
         ang = i * math.pi / 6.0
         hole_coords.append((9.6 * math.cos(ang), 9.6 * math.sin(ang)))
     for hy, hz in hole_coords:
-        hole_cut = sd_cylinder_x(x, y - hy, z - hz, 1.5, 39.0)
+        hole_cut = sd_cylinder_x(x, y - hy, z - hz, 1.5, 40.0)
         shell = op_subtract(shell, hole_cut)
 
-    # 5. Top Circular PTT Button Collar + Exact 6x6mm Tactile Switch Snap-Cradle (z = +27.5 is top)
+    # 5. Top Circular PTT Button Collar + Exact 6x6mm Tactile Switch Snap-Cradle (z = +28.5 is top)
     top_ring = op_subtract(
-        sd_cylinder_z(x, y, z - 27.0, 12.8, 2.2),
-        sd_cylinder_z(x, y, z - 27.0, 11.0, 5.0),
+        sd_cylinder_z(x, y, z - 28.0, 12.8, 2.2),
+        sd_cylinder_z(x, y, z - 28.0, 11.0, 5.0),
     )
     shell = op_union(shell, top_ring)
-    btn_hole = sd_cylinder_z(x, y, z - 26.5, 11.0, 4.5)
+    btn_hole = sd_cylinder_z(x, y, z - 27.5, 11.0, 4.5)
     shell = op_subtract(shell, btn_hole)
     # Internal bridge platform holding the 6x6mm tactile switch 8.5 mm below top hole + 2 retention nibs
-    sw_bridge = sd_round_box(x, y, z - 18.5, 16.5, 6.5, 2.0, 0.4)
-    sw_pocket = sd_round_box(x, y, z - 19.5, 3.2, 3.2, 1.6, 0.2)
-    sw_wire_slot = sd_round_box(x - 4.5, y, z - 18.5, 1.8, 3.5, 3.5, 0.2)
-    sw_nib_l = sd_round_box(x + 2.9, y, z - 20.3, 0.5, 2.0, 0.4, 0.1)
-    sw_nib_r = sd_round_box(x - 2.9, y, z - 20.3, 0.5, 2.0, 0.4, 0.1)
+    sw_bridge = sd_round_box(x, y, z - 19.5, 16.5, 6.5, 2.0, 0.4)
+    sw_pocket = sd_round_box(x, y, z - 20.5, 3.2, 3.2, 1.6, 0.2)
+    sw_wire_slot = sd_round_box(x - 4.5, y, z - 19.5, 1.8, 3.5, 3.5, 0.2)
+    sw_nib_l = sd_round_box(x + 2.9, y, z - 21.3, 0.5, 2.0, 0.4, 0.1)
+    sw_nib_r = sd_round_box(x - 2.9, y, z - 21.3, 0.5, 2.0, 0.4, 0.1)
     sw_assy = np.maximum(
         op_union(op_subtract(sw_bridge, op_union(sw_pocket, sw_wire_slot)), op_union(sw_nib_l, sw_nib_r)),
         outer,
@@ -220,30 +220,30 @@ def sdf_head_shell(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
 
     # 6. Isolated INMP441 Microphone Port + Acoustic Baffle + Top/Bottom PCB Pinch Clips (14.4x10.4mm)
     mic_baffle = op_subtract(
-        sd_cylinder_y(x + 16.5, y + 25.0, z - 16.0, 7.5, 2.8),
-        sd_cylinder_y(x + 16.5, y + 25.0, z - 16.0, 5.4, 3.8),
+        sd_cylinder_y(x + 16.5, y + 26.0, z - 16.5, 7.5, 2.8),
+        sd_cylinder_y(x + 16.5, y + 26.0, z - 16.5, 5.4, 3.8),
     )
-    mic_clip_top = sd_round_box(x + 16.5, y + 23.2, z - 21.6, 4.5, 2.2, 1.0, 0.2)
-    mic_clip_bot = sd_round_box(x + 16.5, y + 23.2, z - 10.4, 4.5, 2.2, 1.0, 0.2)
+    mic_clip_top = sd_round_box(x + 16.5, y + 24.2, z - 22.1, 4.5, 2.2, 1.0, 0.2)
+    mic_clip_bot = sd_round_box(x + 16.5, y + 24.2, z - 10.9, 4.5, 2.2, 1.0, 0.2)
     mic_assy = np.maximum(op_union(mic_baffle, op_union(mic_clip_top, mic_clip_bot)), outer)
-    mic_pinhole = sd_cylinder_y(x + 16.5, y + 28.0, z - 16.0, 1.5, 4.0)
+    mic_pinhole = sd_cylinder_y(x + 16.5, y + 29.0, z - 16.5, 1.5, 4.0)
     shell = op_union(shell, mic_assy)
     shell = op_subtract(shell, mic_pinhole)
 
     # 7. Bottom Neck Collar + 29.8 x 16.0 mm Stadium Spine Slot (100% enclosed inside round neck ring!)
     neck_open = op_union(
-        sd_cylinder_z(x, y, z + 26.5, 13.5, 4.5),
-        sd_round_box(x, y, z + 26.5, 14.9, 8.0, 4.5, 3.5),
+        sd_cylinder_z(x, y, z + 27.5, 13.5, 4.5),
+        sd_round_box(x, y, z + 27.5, 14.9, 8.0, 4.5, 3.5),
     )
     neck_collar = op_subtract(
-        sd_cylinder_z(x, y, z + 27.5, 18.0, 2.5),
+        sd_cylinder_z(x, y, z + 28.5, 18.0, 2.5),
         neck_open,
     )
     shell = op_subtract(shell, neck_open)
     shell = op_union(shell, neck_collar)
 
-    # 8. Wide 49.0 x 45.0 mm Rear Head Service Opening so the 48.0 mm Speaker slides straight in!
-    rear_access = sd_round_box(x, y - 27.5, z, 24.5, 3.8, 22.5, 5.0)
+    # 8. Wide 53.6 x 47.0 mm Rear Head Service Opening so the 52x52x27mm Speaker slides straight in!
+    rear_access = sd_round_box(x, y - 28.5, z, 26.8, 3.8, 23.5, 5.0)
     shell = op_subtract(shell, rear_access)
 
     return shell
@@ -714,9 +714,9 @@ def main() -> None:
     parts_spec = [
         (
             "1_head_shell.stl",
-            "Head Shell (ST7789 + 48mm Speaker Clips + INMP441 + PTT)",
+            "Head Shell (ST7789 + 52x52mm SUNVOICE Speaker Clips + INMP441 + PTT)",
             sdf_head_shell,
-            ((-37.0, 37.0), (-32.0, 32.0), (-31.5, 31.5)),
+            ((-38.0, 38.0), (-33.0, 33.0), (-32.5, 32.5)),
             0.70,
             (236, 240, 245),
         ),
@@ -808,15 +808,15 @@ def main() -> None:
     torso_world = torso_v.copy()
     torso_world[:, 2] += 27.5
 
-    # Position head on top of torso (z = +74.2 mm)
+    # Position head on top of torso (z = +73.2 mm so total height stays 135.0 mm!)
     head_world = head_v.copy()
-    head_world[:, 2] += 74.2
+    head_world[:, 2] += 73.2
 
-    # Rotate visor 90 deg around X to sit on the front of the head (y = -27.5 mm)
+    # Rotate visor 90 deg around X to sit on the front of the head (y = -28.5 mm)
     visor_world = np.zeros_like(visor_v)
     visor_world[:, 0] = visor_v[:, 0]
-    visor_world[:, 1] = -visor_v[:, 2] - 27.5
-    visor_world[:, 2] = visor_v[:, 1] + 74.2 + 29.0
+    visor_world[:, 1] = -visor_v[:, 2] - 28.5
+    visor_world[:, 2] = visor_v[:, 1] + 73.2 + 29.0
 
     # Place button cap at top of head -> exact top of button reaches z = 135.0 mm (13.5 cm)!
     btn_world = btn_v.copy()
@@ -830,7 +830,7 @@ def main() -> None:
         ((-14.0, 14.0), (-14.0, 14.0), (-2.0, 2.0)),
         step=0.5,
     )
-    halo_v[:, 2] += 74.2 + 56.5
+    halo_v[:, 2] += 73.2 + 57.5
 
     # Split left & right arms and place flush against upper oval shoulders (x = +/-30.4, z = +34.5)
     arm_l_v = sdf_single_arm_mesh(-1.0)
@@ -845,8 +845,8 @@ def main() -> None:
         ((-15.0, 15.0), (-3.0, 3.0), (-15.0, 15.0)),
         step=0.7,
     )
-    scr_v[:, 1] -= 26.6
-    scr_v[:, 2] += 74.2 + 16.0
+    scr_v[:, 1] -= 27.6
+    scr_v[:, 2] += 73.2 + 16.0
 
     def sdf_cute_face(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
         eye_l = op_subtract(
@@ -885,8 +885,8 @@ def main() -> None:
         ((-15.0, 15.0), (-3.0, 3.0), (-10.0, 12.0)),
         step=0.45,
     )
-    eye_v[:, 1] -= 27.8
-    eye_v[:, 2] += 74.2 + 19.5
+    eye_v[:, 1] -= 28.8
+    eye_v[:, 2] += 73.2 + 19.5
 
     assembled_meshes = [
         (feet_world, feet_f, (238, 242, 247)),
