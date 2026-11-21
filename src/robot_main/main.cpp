@@ -65,10 +65,10 @@ static constexpr size_t     PREBUFFER_BYTES    = TTS_DEFAULT_RATE * 2 * 400 / 10
 
 // Hands-Free Half-Duplex VAD Parameters
 static constexpr size_t     VAD_PREROLL_SAMPLES          = (MIC_SAMPLE_RATE * 250) / 1000; // 250 ms pre-roll (4,000 samples)
-static constexpr uint32_t   VAD_ONSET_FRAMES_REQUIRED    = 3;                              // 3 x 16 ms = 48 ms speech onset
-static constexpr uint32_t   VAD_SILENCE_HANGOVER_MS      = 900;                            // Stop 900 ms after speech ends
+static constexpr uint32_t   VAD_ONSET_FRAMES_REQUIRED    = 6;                              // 6 x 16 ms = 96 ms speech onset
+static constexpr uint32_t   VAD_SILENCE_HANGOVER_MS      = 600;                            // Stop 600 ms after speech ends
 static constexpr uint32_t   VAD_POST_PLAYBACK_COOLDOWN_MS = 450;                           // Half-duplex deaf window after TTS
-static constexpr int32_t    VAD_MIN_RMS_THRESHOLD        = 750;
+static constexpr int32_t    VAD_MIN_RMS_THRESHOLD        = 1000;
 static constexpr int32_t    VAD_MAX_VALID_AMBIENT_RMS    = 6000;
 
 static int16_t* g_recordPsramBuf  = nullptr;
@@ -805,6 +805,10 @@ void loop() {
         } else {
             flushMicAfterPlayback();
         }
+    }
+    if (g_cfgSessionResetPending) {
+        g_cfgSessionResetPending = false;
+        directResetSession("config changed");
     }
 
     // 1. Check GPIO 1 Button: Hold (>= 400 ms) = Push-to-Talk; Quick Tap (< 350 ms) = Toggle Hands-Free VAD

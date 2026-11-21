@@ -23,27 +23,42 @@
 static constexpr size_t DIRECT_WAV_HEADER_BYTES = 44;
 static constexpr size_t DIRECT_WAV_CAP          = DIRECT_WAV_HEADER_BYTES + MAX_RECORD_SAMPLES * sizeof(int16_t);
 static constexpr size_t DIRECT_B64_WAV_CAP      = ((DIRECT_WAV_CAP + 2) / 3) * 4 + 1;
-static constexpr size_t DIRECT_REQ_CAP          = DIRECT_B64_WAV_CAP + 1024;          // + JSON prefix/suffix
+static constexpr size_t DIRECT_REQ_CAP          = DIRECT_B64_WAV_CAP + 4096;          // + JSON prefix/suffix
 static constexpr size_t DIRECT_RESP_CAP         = 1536 * 1024;                        // 1.5 MB (~23 s of base64 TTS)
 static constexpr size_t DIRECT_PCM_CAP          = (DIRECT_RESP_CAP / 4) * 3;          // decoded PCM upper bound
-static constexpr size_t DIRECT_MAX_HISTORY      = 6;                                  // last 3 user+model turns
+static constexpr uint32_t DIRECT_SESSION_IDLE_MS   = 10UL * 60UL * 1000UL;            // 10 min idle timeout
+static constexpr uint32_t DIRECT_SESSION_MAX_TURNS = 12;                              // Bounded server-side chain
 
-static const char* const DIRECT_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
-static const char* const DIRECT_SYSTEM_PROMPT =
-    "You are a cheerful small tabletop robot. Reply in plain spoken English "
-    "under 25 words without markdown. Prefix your reply with [WAVE] when "
-    "greeting or saying goodbye, or optionally [HAPPY], [SURPRISED], or [SAD] "
-    "to match your emotion.";
+static const char* const DIRECT_GEMINI_BASE      = "https://generativelanguage.googleapis.com/v1beta/models/";
+static const char* const DIRECT_INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
+static const char* const DIRECT_CHAT_SYSTEM_PROMPT =
+    "You are a warm, witty, cheerful small tabletop robot friend having a natural "
+    "spoken conversation. Speak casually in 1 to 2 short natural sentences (under 30 words, "
+    "plain spoken English, no markdown) and keep the chat flowing naturally. Prefix your "
+    "reply with [WAVE] for greetings/goodbyes, or [HAPPY], [SURPRISED], or [SAD] to match "
+    "emotion. CRITICAL NOISE FILTER: If the audio contains ONLY silence, fan or room noise, "
+    "coughing, tapping, unintelligible mumbling, or distant background TV or people clearly "
+    "not talking to you, reply ONLY with [SILENCE].";
 
 static uint8_t* g_directWavPsram  = nullptr;
 static uint8_t* g_directReqPsram  = nullptr;
 static uint8_t* g_directRespPsram = nullptr;
 static uint8_t* g_directPcmPsram  = nullptr;
 
-static String g_directHistRole[DIRECT_MAX_HISTORY];
-static String g_directHistText[DIRECT_MAX_HISTORY];
-static size_t g_directHistCount = 0;
-static String g_chitSessionId;
+static String   g_geminiInteractionId;
+static uint32_t g_geminiTurnCount  = 0;
+static uint32_t g_geminiLastTurnMs = 0;
+static String   g_chitSessionId;
+
+static void directResetSession(const char* reason) {
+    if (g_geminiInteractionId.length() > 0 || g_geminiTurnCount > 0 || g_chitSessionId.length() > 0) {
+        Serial.printf("[DIRECT] Session reset (%s)\n", reason);
+    }
+    g_geminiInteractionId = "";
+    g_geminiTurnCount = 0;
+    g_geminiLastTurnMs = 0;
+    g_chitSessionId = "";
+}
 
 static bool directModeAllocate() {
     g_directWavPsram  = static_cast<uint8_t*>(ps_malloc(DIRECT_WAV_CAP));
@@ -195,47 +210,135 @@ static bool directTranscribe(size_t sampleCount, String& transcript) {
     return extractGeminiText(sink, transcript);
 }
 
-static void directHistoryAppend(const char* role, const String& text) {
-    if (g_directHistCount == DIRECT_MAX_HISTORY) {
-        for (size_t i = 1; i < DIRECT_MAX_HISTORY; ++i) {
-            g_directHistRole[i - 1] = g_directHistRole[i];
-            g_directHistText[i - 1] = g_directHistText[i];
-        }
-        g_directHistCount--;
-    }
-    g_directHistRole[g_directHistCount] = role;
-    g_directHistText[g_directHistCount] = text;
-    g_directHistCount++;
-}
+// Extracts interaction id and non-thought text from /v1beta/interactions JSON
+static bool extractInteractionResponse(const PsramCaptureSink& sink, String& outId, String& outText) {
+    JsonDocument filter;
+    filter["id"] = true;
+    filter["error"]["message"] = true;
+    filter["steps"][0]["type"] = true;
+    filter["steps"][0]["content"][0]["type"] = true;
+    filter["steps"][0]["content"][0]["text"] = true;
+    filter["outputs"][0]["type"] = true;
+    filter["outputs"][0]["text"] = true;
 
-static bool directReplyGemini(const String& transcript, String& reply) {
     JsonDocument doc;
-    doc["systemInstruction"]["parts"][0]["text"] = DIRECT_SYSTEM_PROMPT;
-    JsonArray contents = doc["contents"].to<JsonArray>();
-    for (size_t i = 0; i < g_directHistCount; ++i) {
-        JsonObject turn = contents.add<JsonObject>();
-        turn["role"] = g_directHistRole[i];
-        turn["parts"][0]["text"] = g_directHistText[i];
-    }
-    JsonObject userTurn = contents.add<JsonObject>();
-    userTurn["role"] = "user";
-    userTurn["parts"][0]["text"] = transcript;
-    doc["generationConfig"]["maxOutputTokens"] = 256;
-    doc["generationConfig"]["temperature"] = 0.6;
-    doc["generationConfig"]["thinkingConfig"]["thinkingLevel"] = "MINIMAL";
-
-    String body;
-    serializeJson(doc, body);
-
-    PsramCaptureSink sink(g_directRespPsram, DIRECT_RESP_CAP);
-    String url = String(DIRECT_GEMINI_BASE) + g_cfg.llmModel + ":generateContent";
-    int status = directPost(url, GOOGLE_API_ROOT_CA_PEM, "x-goog-api-key", g_cfg.geminiKey,
-                            reinterpret_cast<const uint8_t*>(body.c_str()), body.length(), sink);
-    if (status != 200) {
-        Serial.printf("[DIRECT] LLM HTTP %d: %.200s\n", status, sink.c_str());
+    DeserializationError err = deserializeJson(doc, sink.c_str(), sink.length(),
+                                               DeserializationOption::Filter(filter));
+    if (err) {
+        Serial.printf("[DIRECT] Interact JSON parse error: %s\n", err.c_str());
         return false;
     }
-    return extractGeminiText(sink, reply);
+    if (!doc["error"]["message"].isNull()) {
+        Serial.printf("[DIRECT] Interact error: %s\n", doc["error"]["message"].as<const char*>());
+        return false;
+    }
+
+    outId = doc["id"] | "";
+    outId.trim();
+    outText = "";
+
+    for (JsonObject step : doc["steps"].as<JsonArray>()) {
+        const char* stype = step["type"] | "";
+        if (strcmp(stype, "thought") == 0) continue;
+        if (strcmp(stype, "model_output") == 0) {
+            for (JsonObject item : step["content"].as<JsonArray>()) {
+                const char* ctype = item["type"] | "";
+                if (ctype[0] == '\0' || strcmp(ctype, "text") == 0) {
+                    outText += item["text"] | "";
+                }
+            }
+        }
+    }
+
+    if (outText.length() == 0 && doc["outputs"].is<JsonArray>()) {
+        for (JsonObject item : doc["outputs"].as<JsonArray>()) {
+            const char* otype = item["type"] | "";
+            if (otype[0] == '\0' || strcmp(otype, "text") == 0) {
+                outText += item["text"] | "";
+            }
+        }
+    }
+
+    outText.trim();
+    return true;
+}
+
+static bool directInteractAudioGemini(size_t sampleCount, String& reply, String& outNewId, bool& outIsSilence) {
+    reply = "";
+    outNewId = "";
+    outIsSilence = false;
+
+    if (g_geminiInteractionId.length() > 0) {
+        if ((millis() - g_geminiLastTurnMs) >= DIRECT_SESSION_IDLE_MS) {
+            directResetSession("idle timeout 10m");
+        } else if (g_geminiTurnCount >= DIRECT_SESSION_MAX_TURNS) {
+            directResetSession("max turns 12 reached");
+        }
+    }
+
+    const uint32_t pcmBytes = sampleCount * sizeof(int16_t);
+    writeWavHeader16kMono(g_directWavPsram, pcmBytes);
+    memcpy(g_directWavPsram + DIRECT_WAV_HEADER_BYTES, g_recordPsramBuf, pcmBytes);
+
+    String prefix;
+    prefix.reserve(1024);
+    prefix += "{\"model\":\"";
+    prefix += g_cfg.llmModel;
+    prefix += "\"";
+    if (g_geminiInteractionId.length() > 0 && isSafeSecret(g_geminiInteractionId, 256)) {
+        prefix += ",\"previous_interaction_id\":\"";
+        prefix += g_geminiInteractionId;
+        prefix += "\"";
+    }
+    prefix += ",\"system_instruction\":\"";
+    prefix += DIRECT_CHAT_SYSTEM_PROMPT;
+    prefix += "\",\"generation_config\":{\"thinking_level\":\"minimal\",\"temperature\":0.7,\"max_output_tokens\":200}";
+    prefix += ",\"input\":[{\"type\":\"text\",\"text\":\"Listen to this audio. If it is only noise, silence, or background voices not talking to you, reply ONLY [SILENCE]. Otherwise reply naturally in conversation.\"},{\"type\":\"audio\",\"mime_type\":\"audio/wav\",\"data\":\"";
+
+    static const char kSuffix[] = "\"}]}";
+    const size_t prefixLen = prefix.length();
+    if (prefixLen + sizeof(kSuffix) >= DIRECT_REQ_CAP) {
+        Serial.println("[DIRECT] Request prefix overflow");
+        return false;
+    }
+
+    memcpy(g_directReqPsram, prefix.c_str(), prefixLen);
+    size_t b64Len = 0;
+    int rc = mbedtls_base64_encode(g_directReqPsram + prefixLen,
+                                   DIRECT_REQ_CAP - prefixLen - sizeof(kSuffix),
+                                   &b64Len, g_directWavPsram, DIRECT_WAV_HEADER_BYTES + pcmBytes);
+    if (rc != 0) {
+        Serial.printf("[DIRECT] Interact base64 encode failed (%d)\n", rc);
+        return false;
+    }
+    size_t pos = prefixLen + b64Len;
+    memcpy(g_directReqPsram + pos, kSuffix, sizeof(kSuffix) - 1);
+    pos += sizeof(kSuffix) - 1;
+
+    PsramCaptureSink sink(g_directRespPsram, DIRECT_RESP_CAP);
+    int status = directPost(DIRECT_INTERACTIONS_URL, GOOGLE_API_ROOT_CA_PEM, "x-goog-api-key", g_cfg.geminiKey,
+                            g_directReqPsram, pos, sink);
+    if ((status == 400 || status == 404) && g_geminiInteractionId.length() > 0) {
+        Serial.printf("[DIRECT] Stale interaction id rejected (HTTP %d) -> resetting\n", status);
+        directResetSession("HTTP 400/404 stale id");
+        return false;
+    }
+    if (status != 200) {
+        Serial.printf("[DIRECT] Interact HTTP %d: %.200s\n", status, sink.c_str());
+        return false;
+    }
+    if (!extractInteractionResponse(sink, outNewId, reply)) {
+        return false;
+    }
+
+    String upper = reply;
+    upper.toUpperCase();
+    if (reply.length() == 0 || upper.indexOf("[SILENCE]") >= 0) {
+        outIsSilence = true;
+        outNewId = "";
+        return true;
+    }
+    return true;
 }
 
 static bool directReplyChit(const String& transcript, String& reply) {
@@ -391,36 +494,64 @@ static void processDirectTurn(size_t sampleCount) {
     g_robotState = STATE_THINKING;
 
     const uint32_t t0 = millis();
-    String transcript;
-    if (!directTranscribe(sampleCount, transcript)) { directShowError("STT"); flushMicAfterPlayback(); return; }
-    const uint32_t t1 = millis();
-    if (transcript.length() == 0) {
-        Serial.println("[DIRECT] Empty transcript (silence/noise) -> idle");
-        g_robotState = STATE_IDLE;
-        flushMicAfterPlayback();
-        return;
-    }
-    Serial.printf("[DIRECT] You said: %s\n", transcript.c_str());
-
+    uint32_t t1 = t0;
+    uint32_t t2 = t0;
     String reply;
-    bool llmOk = (g_cfg.llm == "chit") ? directReplyChit(transcript, reply)
-                                       : directReplyGemini(transcript, reply);
-    if (!llmOk || reply.length() == 0) { directShowError("LLM"); flushMicAfterPlayback(); return; }
-    const uint32_t t2 = millis();
+    String newInteractionId;
+    const bool useGeminiInteractions = (g_cfg.llm != "chit");
+
+    if (useGeminiInteractions) {
+        bool isSilence = false;
+        if (!directInteractAudioGemini(sampleCount, reply, newInteractionId, isSilence)) {
+            directShowError("LLM");
+            flushMicAfterPlayback();
+            return;
+        }
+        t2 = millis();
+        if (isSilence) {
+            Serial.printf("[DIRECT] Ignored noise/background ([SILENCE]) in %lu ms -> idle\n",
+                          static_cast<unsigned long>(t2 - t0));
+            g_robotState = STATE_IDLE;
+            flushMicAfterPlayback();
+            return;
+        }
+    } else {
+        String transcript;
+        if (!directTranscribe(sampleCount, transcript)) { directShowError("STT"); flushMicAfterPlayback(); return; }
+        t1 = millis();
+        if (transcript.length() == 0) {
+            Serial.println("[DIRECT] Empty transcript (silence/noise) -> idle");
+            g_robotState = STATE_IDLE;
+            flushMicAfterPlayback();
+            return;
+        }
+        Serial.printf("[DIRECT] You said: %s\n", transcript.c_str());
+
+        if (!directReplyChit(transcript, reply) || reply.length() == 0) {
+            directShowError("LLM");
+            flushMicAfterPlayback();
+            return;
+        }
+        t2 = millis();
+    }
 
     const char* tagLabel = "";
     const RobotExpression expr = extractExpressionTag(reply, tagLabel);
     if (reply.length() == 0) { directShowError("LLM"); flushMicAfterPlayback(); return; }
     Serial.printf("[DIRECT] Robot says: %s%s\n", tagLabel, reply.c_str());
 
+    const uint32_t tTts0 = millis();
     size_t pcmBytes = 0;
     uint32_t sampleRate = TTS_DEFAULT_RATE;
     if (!directSynthesize(reply, pcmBytes, sampleRate)) { directShowError("TTS"); flushMicAfterPlayback(); return; }
     const uint32_t t3 = millis();
 
-    // Only commit history once the reply is actually going to be spoken
-    directHistoryAppend("user", transcript);
-    directHistoryAppend("model", reply);
+    // Commit stateful chain only after audio is ready to play (noise/errors never pollute history)
+    if (useGeminiInteractions && newInteractionId.length() > 0) {
+        g_geminiInteractionId = newInteractionId;
+        g_geminiTurnCount++;
+        g_geminiLastTurnMs = millis();
+    }
 
     ESP_ERROR_CHECK(i2s_set_clk(AMP_I2S_PORT, sampleRate, I2S_BITS_PER_SAMPLE_16BIT, I2S_CHANNEL_STEREO));
     g_activeExpression = expr;
@@ -432,10 +563,20 @@ static void processDirectTurn(size_t sampleCount) {
     speaker.write(g_directPcmPsram, pcmBytes);
     speaker.flushRemaining();
 
-    Serial.printf("[DIRECT] Timings ms: STT=%lu LLM=%lu TTS=%lu (first audio after %lu) | %u PCM bytes @ %lu Hz | Free Heap: %u\n",
-                  static_cast<unsigned long>(t1 - t0), static_cast<unsigned long>(t2 - t1),
-                  static_cast<unsigned long>(t3 - t2), static_cast<unsigned long>(t3 - t0),
-                  static_cast<unsigned>(pcmBytes), static_cast<unsigned long>(sampleRate), ESP.getFreeHeap());
+    if (useGeminiInteractions) {
+        Serial.printf("[DIRECT] Stateful Turn %lu/%lu | Timings ms: ChatAudio=%lu TTS=%lu (first audio after %lu) | %u PCM bytes @ %lu Hz | Free Heap: %u\n",
+                      static_cast<unsigned long>(g_geminiTurnCount),
+                      static_cast<unsigned long>(DIRECT_SESSION_MAX_TURNS),
+                      static_cast<unsigned long>(t2 - t0),
+                      static_cast<unsigned long>(t3 - tTts0),
+                      static_cast<unsigned long>(t3 - t0),
+                      static_cast<unsigned>(pcmBytes), static_cast<unsigned long>(sampleRate), ESP.getFreeHeap());
+    } else {
+        Serial.printf("[DIRECT] Timings ms: STT=%lu LLM=%lu TTS=%lu (first audio after %lu) | %u PCM bytes @ %lu Hz | Free Heap: %u\n",
+                      static_cast<unsigned long>(t1 - t0), static_cast<unsigned long>(t2 - t1),
+                      static_cast<unsigned long>(t3 - tTts0), static_cast<unsigned long>(t3 - t0),
+                      static_cast<unsigned>(pcmBytes), static_cast<unsigned long>(sampleRate), ESP.getFreeHeap());
+    }
     g_activeExpression = EXPR_NEUTRAL;
     g_robotState = STATE_IDLE;
     flushMicAfterPlayback();

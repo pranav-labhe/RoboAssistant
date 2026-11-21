@@ -59,6 +59,7 @@ static RobotConfig g_cfg;
 static Preferences g_prefs;
 static WebServer   g_configServer(80);
 static bool        g_cfgVadChangedPending = false;
+static bool        g_cfgSessionResetPending = false;
 
 static void configSetDefaults(RobotConfig& c) {
     c.mode         = ROBOT_DEFAULT_MODE;
@@ -244,6 +245,7 @@ static void handlePostConfig() {
         bool oldVad = g_cfg.vad;
         configSetDefaults(g_cfg);
         g_cfgVadChangedPending = (oldVad != g_cfg.vad);
+        g_cfgSessionResetPending = true;
         g_configServer.send(200, "application/json", configToMaskedJson(g_cfg));
         Serial.println("[CONFIG] Factory reset -> compile-time defaults");
         return;
@@ -313,6 +315,9 @@ static void handlePostConfig() {
         return;
     }
     g_cfgVadChangedPending = (next.vad != g_cfg.vad);
+    if (next.mode != g_cfg.mode || next.llm != g_cfg.llm || next.llmModel != g_cfg.llmModel) {
+        g_cfgSessionResetPending = true;
+    }
     g_cfg = next;
     g_configServer.send(200, "application/json", configToMaskedJson(g_cfg));
     Serial.printf("[CONFIG] Updated -> mode=%s llm=%s vad=%s\n",
