@@ -1,0 +1,39 @@
+================================================================================
+Toy — 3D Printing Shop Specification Sheet (9 Individual .STL Files)
+================================================================================
+Units / Scale     : MILLIMETERS (1:1 scale — DO NOT RESIZE OR AUTO-SCALE!)
+Assembled Height  : 163.5 mm (16.35 cm)
+Total Parts       : 9 watertight binary .STL files (~156.35 cm³ solid / ~186.4 g sliced)
+
+1. SINGLE-COLOR BATCH PRINT LIST (9 FILES — PRINT IN 1 BATCH TO SAVE COST)
+--------------------------------------------------------------------------------
+Material & Color  : ALL 9 files in ONE single color — Matte White PLA+ (or PLA)
+  1. 1_head_shell.stl            (89.2 x 61.9 x 70.4 mm)
+  2. 2_front_visor_bezel.stl     (60.0 x 41.0 x 12.0 mm)
+  3. 3_top_ptt_button_cap.stl    (23.5 x 23.5 x  9.0 mm)
+  4. 4_torso_shell.stl           (83.3 x 77.3 x 69.5 mm)
+  5. 5_back_access_door.stl      (61.0 x 62.1 x 19.1 mm)
+  6. 6_arms_left_and_right.stl   (50.6 x 15.6 x 46.7 mm)
+  7. 7_thighs_left_and_right.stl (51.9 x 22.4 x 38.9 mm)
+  8. 8_feet_left_and_right.stl   (56.5 x 38.9 x 12.7 mm)
+  9. 9_head_back_cap.stl         (40.8 x 40.8 x  9.6 mm)
+
+2. RECOMMENDED SLICER SETTINGS (CRITICAL FOR SNAP-LOCKS & WALL FLEX)
+--------------------------------------------------------------------------------
+- Material          : Standard PLA+ (or PLA)
+- Layer Height      : 0.20 mm (0.16 mm optional on #1 & #2 for smoother curves)
+- Wall / Perimeters : 3 walls (1.2 mm) — required for strong compliant snap-clips
+- Infill            : 15% Gyroid (or Grid)
+- Supports          : Tree Supports (Touching Buildplate Only) for:
+                        * 1_head_shell.stl
+                        * 4_torso_shell.stl
+                        * 7_thighs_left_and_right.stl
+                      Minimal brim only if needed for:
+                        * 6_arms_left_and_right.stl
+                      NO SUPPORTS needed for:
+                        * 2_front_visor_bezel.stl (print curved face up / lip down)
+                        * 3_top_ptt_button_cap.stl
+                        * 5_back_access_door.stl (print outer curved face down)
+                        * 8_feet_left_and_right.stl
+                        * 9_head_back_cap.stl
+================================================================================
